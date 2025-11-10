@@ -1,0 +1,454 @@
+const path = require('path');
+const envPath = path.resolve(__dirname, '../.env');
+console.log('Loading .env from:', envPath);
+require('dotenv').config({ path: envPath });
+const express = require('express');
+const bodyParser = require('body-parser');
+const fs = require('fs').promises;
+const Ajv = require('ajv');
+const { Document, Packer, Paragraph } = require('docx');
+const Database = require('better-sqlite3');
+const llm = require('./services/llm');
+
+const app = express();
+const port = process.env.PORT || 4000;
+const ajv = new Ajv();
+
+// Enable CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Database setup
+const dbPath = path.resolve(__dirname, process.env.DB_PATH || './data/db.sqlite');
+console.log('Using database at:', dbPath);
+
+// Create data directory if it doesn't exist
+const dataDir = path.dirname(dbPath);
+if (!require('fs').existsSync(dataDir)) {
+  require('fs').mkdirSync(dataDir, { recursive: true });
+}
+
+const db = new Database(dbPath);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    project_text TEXT,
+    sdlc_analysis JSON,
+    project_plan JSON,
+    srs_content TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS srs_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT,
+    version INTEGER,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    editor TEXT CHECK(editor IN ('user', 'assistant')),
+    srs_content TEXT,
+    prompt_text TEXT,
+    suggestion_text TEXT,
+    selection_start INTEGER,
+    selection_end INTEGER,
+    FOREIGN KEY(project_id) REFERENCES projects(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT,
+    endpoint TEXT,
+    prompt TEXT,
+    raw_response TEXT,
+    parsed_response JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Load schemas
+const sdlcSchema = require('./schemas/sdlc_recommendation.schema.json');
+const planSchema = require('./schemas/plan_requirements.schema.json');
+
+// Load prompts
+async function loadPrompt(filename) {
+  return await fs.readFile(path.join(__dirname, 'prompts', filename), 'utf-8');
+}
+
+// LLM wrapper
+async function callLLM(promptText) {
+  try {
+    return await llm.generate(promptText);
+  } catch (error) {
+    if (error.message.includes('Rate limit exceeded')) {
+      throw new Error('Server is busy, please try again in a few moments');
+    }
+    throw error;
+  }
+}
+
+// Validation helper
+async function validateLLMResponse(responseText, schema, retryPrompt) {
+  try {
+    const parsed = JSON.parse(responseText);
+    if (ajv.validate(schema, parsed)) {
+      return parsed;
+    }
+
+    // Retry once with explicit schema instruction
+    const retryResponse = await callLLM(retryPrompt);
+    const parsed2 = JSON.parse(retryResponse);
+    
+    if (ajv.validate(schema, parsed2)) {
+      return parsed2;
+    }
+    
+    throw new Error('Failed to get valid JSON after retry');
+  } catch (error) {
+    console.error('Validation Error:', error.message);
+    throw error;
+  }
+}
+
+// Logging helper
+async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedResponse) {
+  db.prepare(`
+    INSERT INTO logs (project_id, endpoint, prompt, raw_response, parsed_response)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(projectId, endpoint, prompt, rawResponse, JSON.stringify(parsedResponse));
+}
+
+// Endpoints
+app.use(bodyParser.json());
+
+app.post('/api/sdlc/recommend', async (req, res) => {
+  try {
+    const { project_text, constraints } = req.body;
+    
+    if (!project_text) {
+      return res.status(400).json({ error: 'Project description is required' });
+    }
+
+    const promptTemplate = await loadPrompt('sdlc_prompt.txt');
+    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', 
+      `${project_text}${constraints ? '\nConstraints: ' + JSON.stringify(constraints) : ''}`);
+
+    console.log('Calling LLM with prompt:', prompt);
+    const rawResponse = await callLLM(prompt);
+    console.log('Raw LLM response:', rawResponse);
+
+    const validated = await validateLLMResponse(
+      rawResponse,
+      sdlcSchema,
+      `Previous output invalid. Please return ONLY JSON matching schema: ${JSON.stringify(sdlcSchema)}. Project: ${project_text}`
+    );
+
+    await logInteraction(req.params.id || 'anonymous', '/api/sdlc/recommend', prompt, rawResponse, validated);
+    res.json(validated);
+  } catch (error) {
+    console.error('SDLC recommendation error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+app.post('/api/plan/generate', async (req, res) => {
+  try {
+    const { project_text } = req.body;
+    const promptTemplate = await loadPrompt('plan_prompt.txt');
+    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', project_text);
+
+    const rawResponse = await callLLM(prompt);
+    const validated = await validateLLMResponse(
+      rawResponse,
+      planSchema,
+      `Previous output invalid. Please return ONLY JSON matching schema: ${JSON.stringify(planSchema)}. Project: ${project_text}`
+    );
+
+    await logInteraction(req.params.id, '/api/plan/generate', prompt, rawResponse, validated);
+    res.json(validated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper to determine if text is code block
+function isCodeBlock(text) {
+  // Check for common code indicators
+  const codeIndicators = [
+    /^```[\s\S]*```$/m,  // Markdown code blocks
+    /^    [\s\S]*$/m,    // 4-space indented code
+    /^\t[\s\S]*$/m,      // Tab indented code
+    /{[\s\S]*}|function\s*\(|class\s+\w+|import\s+|export\s+|const\s+|let\s+|var\s+/m // Code-like content
+  ];
+  return codeIndicators.some(pattern => pattern.test(text));
+}
+
+// Helper to extract paragraph containing cursor
+function extractRelevantParagraph(text, cursorPosition) {
+  const paragraphs = text.split(/\n\s*\n/);
+  let currentPos = 0;
+  
+  for (const paragraph of paragraphs) {
+    const paragraphLength = paragraph.length + 2; // +2 for the newlines
+    if (currentPos <= cursorPosition && currentPos + paragraphLength >= cursorPosition) {
+      return paragraph.trim();
+    }
+    currentPos += paragraphLength;
+  }
+  
+  return text; // Fallback to full text if paragraph not found
+}
+
+app.post('/api/srs/edit', async (req, res) => {
+  try {
+    const { 
+      project_id, 
+      selected_text, 
+      instruction, 
+      selection_start, 
+      selection_end,
+      full_content 
+    } = req.body;
+
+    // Handle text size and code blocks
+    let textToProcess = selected_text;
+    let isCode = false;
+    let contextNote = '';
+
+    // Check if selection is too large (more than ~500 words)
+    if (selected_text.split(/\s+/).length > 500) {
+      textToProcess = extractRelevantParagraph(selected_text, 
+        Math.floor((selection_end - selection_start) / 2) + selection_start);
+      contextNote = 'Note: Due to length, only processing the relevant paragraph. ';
+    }
+
+    // Check for code blocks
+    if (isCodeBlock(textToProcess)) {
+      isCode = true;
+      contextNote += 'Contains code blocks - preserving code structure unless explicitly requested. ';
+    }
+
+    const promptTemplate = await loadPrompt('edit_prompt.txt');
+    let prompt = promptTemplate
+      .replace('<<<USER_INSTRUCTION>>>', instruction)
+      .replace('<<<SELECTED_TEXT>>>', textToProcess);
+
+    // Add context about code if present
+    if (isCode) {
+      prompt += '\nNote: The text contains code blocks. Unless specifically requested, preserve code structure and only modify comments or documentation.';
+    }
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = JSON.parse(rawResponse);
+    
+    if (!parsed.suggestion_text || parsed.suggestion_text.trim().length === 0) {
+      throw new Error('Invalid or empty suggestion received');
+    }
+
+    // For code blocks, validate that structure is preserved unless explicitly requested
+    if (isCode && !instruction.toLowerCase().includes('code') && 
+        !instruction.toLowerCase().includes('implement')) {
+      const originalStructure = textToProcess.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim();
+      const newStructure = parsed.suggestion_text.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim();
+      
+      if (originalStructure !== newStructure) {
+        throw new Error('Code structure was modified when it should have been preserved');
+      }
+    }
+
+    // Add context note to explanation if present
+    if (contextNote) {
+      parsed.explanation = `${contextNote}${parsed.explanation || ''}`;
+    }
+
+    // Validate confidence score
+    if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 1) {
+      parsed.confidence = 0.5; // Default confidence if invalid
+    }
+
+    await logInteraction(project_id, '/api/srs/edit', prompt, rawResponse, parsed);
+    res.json(parsed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Apply SRS edit and create new version
+app.post('/api/srs/apply', async (req, res) => {
+  try {
+    const { 
+      project_id, 
+      srs_content, 
+      prompt_text, 
+      suggestion_text,
+      selection_start,
+      selection_end
+    } = req.body;
+
+    // Get current version number
+    const lastVersion = db.prepare(`
+      SELECT version 
+      FROM srs_versions 
+      WHERE project_id = ? 
+      ORDER BY version DESC 
+      LIMIT 1
+    `).get(project_id);
+
+    const newVersion = (lastVersion?.version || 0) + 1;
+
+    // Start transaction
+    db.transaction(() => {
+      // Update project's current SRS content
+      db.prepare(`
+        UPDATE projects 
+        SET srs_content = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(srs_content, project_id);
+
+      // Create new version record
+      db.prepare(`
+        INSERT INTO srs_versions (
+          project_id,
+          version,
+          editor,
+          srs_content,
+          prompt_text,
+          suggestion_text,
+          selection_start,
+          selection_end
+        ) VALUES (?, ?, 'assistant', ?, ?, ?, ?, ?)
+      `).run(
+        project_id,
+        newVersion,
+        srs_content,
+        prompt_text,
+        suggestion_text,
+        selection_start,
+        selection_end
+      );
+    })();
+
+    res.json({ version: newVersion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new project
+app.post('/api/project', (req, res) => {
+  try {
+    const { title, project_text } = req.body;
+    const id = 'p' + Date.now();
+
+    db.prepare(`
+      INSERT INTO projects (id, title, project_text, srs_content)
+      VALUES (?, ?, ?, '')
+    `).run(id, title, project_text);
+
+    res.json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get project details with latest SRS content
+app.get('/api/project/:id', (req, res) => {
+  try {
+    const project = db.prepare(`
+      SELECT p.*, 
+        (SELECT COUNT(*) FROM srs_versions WHERE project_id = p.id) as version_count
+      FROM projects p
+      WHERE p.id = ?
+    `).get(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get project version history
+app.get('/api/project/:id/versions', (req, res) => {
+  try {
+    const versions = db.prepare(`
+      SELECT 
+        version,
+        timestamp,
+        editor,
+        prompt_text,
+        suggestion_text,
+        selection_start,
+        selection_end
+      FROM srs_versions
+      WHERE project_id = ?
+      ORDER BY version DESC
+    `).all(req.params.id);
+
+    res.json(versions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get specific version content
+app.get('/api/project/:id/version/:version', (req, res) => {
+  try {
+    const versionData = db.prepare(`
+      SELECT *
+      FROM srs_versions
+      WHERE project_id = ? AND version = ?
+    `).get(req.params.id, req.params.version);
+
+    if (!versionData) {
+      return res.status(404).json({ error: 'Version not found' });
+    }
+
+    res.json(versionData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const { createProjectDocument } = require('./services/docx-generator');
+
+app.post('/api/project/:id/export', async (req, res) => {
+  try {
+    const project = db.prepare(`
+      SELECT p.*,
+        (SELECT COUNT(*) FROM srs_versions WHERE project_id = p.id) as version_count
+      FROM projects p
+      WHERE p.id = ?
+    `).get(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const doc = createProjectDocument(project);
+    const buffer = await Packer.toBuffer(doc);
+    const filename = `srs_project_${req.params.id}_v${project.version_count}.docx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ error: 'Failed to generate document' });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});

@@ -1,0 +1,116 @@
+const path = require('path');
+const envPath = path.resolve(__dirname, '../../.env');
+console.log('Loading LLM .env from:', envPath);
+require('dotenv').config({ path: envPath });
+const axios = require('axios');
+
+class RateLimiter {
+    constructor(maxRequests, timeWindowMs) {
+        this.maxRequests = maxRequests;
+        this.timeWindowMs = timeWindowMs;
+        this.requests = [];
+    }
+
+    async tryAcquire() {
+        const now = Date.now();
+        this.requests = this.requests.filter(
+            timestamp => now - timestamp < this.timeWindowMs
+        );
+
+        if (this.requests.length >= this.maxRequests) {
+            const oldestRequest = this.requests[0];
+            const timeToWaitMs = this.timeWindowMs - (now - oldestRequest);
+            throw new Error(`Rate limit exceeded. Please try again in ${Math.ceil(timeToWaitMs / 1000)} seconds.`);
+        }
+
+        this.requests.push(now);
+        return true;
+    }
+}
+
+const rateLimiter = new RateLimiter(30, 60 * 1000);
+
+class LLMService {
+    constructor() {
+        if (!process.env.GEMINI_API_KEY) {
+            throw new Error('GEMINI_API_KEY environment variable is not set');
+        }
+        this.apiKey = process.env.GEMINI_API_KEY;
+    }
+
+    async generate(prompt) {
+        try {
+            await rateLimiter.tryAcquire();
+            
+            console.log('Making request with prompt:', prompt);
+            
+            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+            const data = {
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }]
+            };
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                params: {
+                    key: this.apiKey.trim()
+                },
+                timeout: 30000
+            };
+            
+            console.log('Sending request to Gemini API...');
+            const response = await axios.post(url, data, config);
+            console.log('API Response:', JSON.stringify(response.data, null, 2));
+            
+            if (response.data.candidates && 
+                response.data.candidates[0] && 
+                response.data.candidates[0].content && 
+                response.data.candidates[0].content.parts && 
+                response.data.candidates[0].content.parts[0]) {
+                let text = response.data.candidates[0].content.parts[0].text;
+                // Remove markdown code blocks if present
+                text = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+                return text;
+            }
+            
+            throw new Error('Invalid response format from Gemini API');
+        } catch (error) {
+            console.error('Full error details:', error);
+
+            if (error.response) {
+                console.error('Error response:', {
+                    status: error.response.status,
+                    data: error.response.data
+                });
+            }
+
+            if (error.code === 'ECONNABORTED' || error.response?.status === 429) {
+                throw new Error('LLM temporarily unavailable, please try again in a few moments');
+            }
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                throw new Error('Invalid API key - please check your configuration');
+            }
+
+            if (error.message.includes('Rate limit exceeded')) {
+                throw error;
+            }
+
+            if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+                throw new Error('Unable to connect to Gemini API - please check your internet connection');
+            }
+
+            throw new Error(error.response?.data?.error?.message || 'LLM service error, please try again');
+        }
+    }
+
+    resetRateLimit() {
+        rateLimiter.requests = [];
+    }
+}
+
+module.exports = new LLMService();

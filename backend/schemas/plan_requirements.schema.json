@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project Plan and Implicit Requirements Schema",
+  "description": "Schema for validating project plans and implicit requirements",
+  "type": "object",
+  "required": ["milestones", "implicit_requirements"],
+  "properties": {
+    "milestones": {
+      "type": "array",
+      "description": "List of project milestones",
+      "items": {
+        "type": "object",
+        "required": ["title", "duration_weeks", "deliverables"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the milestone"
+          },
+          "duration_weeks": {
+            "type": "integer",
+            "description": "Expected duration in weeks"
+          },
+          "deliverables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of deliverables for this milestone"
+          },
+          "roles_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of roles required for this milestone"
+          }
+        }
+      }
+    },
+    "implicit_requirements": {
+      "type": "array",
+      "description": "List of implicit requirements identified",
+      "items": {
+        "type": "object",
+        "required": ["title", "type", "priority", "description", "rationale"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the requirement"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["FR", "NFR"],
+            "description": "Type of requirement (Functional or Non-Functional)"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Priority level of the requirement"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the requirement"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Reasoning behind this requirement"
+          }
+        }
+      }
+    }
+  }
+}

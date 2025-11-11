@@ -206,7 +206,7 @@ export default function HomePage() {
             onClick={() => window.location.href = '/srs-editor'}
             className="px-4 py-2 bg-purple-500 text-white rounded"
           >
-            Open SRS Editor
+            SRS Editor
           </button>
         </div>
       </div>

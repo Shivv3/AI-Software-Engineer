@@ -13,12 +13,39 @@ const COMMON_PROMPTS = [
 ];
 
 export default function SRSEditor() {
+  const [showWizard, setShowWizard] = useState(true);
+  const [projectDescription, setProjectDescription] = useState('');
   const [content, setContent] = useState('');
   const [selectedText, setSelectedText] = useState('');
   const [instruction, setInstruction] = useState('');
   const [suggestion, setSuggestion] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [generateLoading, setGenerateLoading] = useState(false);
   const quillRef = useRef();
+
+  const [versions, setVersions] = useState([]);
+  const [currentVersion, setCurrentVersion] = useState(0);
+  const projectId = 'p1'; // In real app, get from route or context
+
+  const handleGenerateSRS = async () => {
+    if (!projectDescription.trim()) {
+      alert('Please enter a project description');
+      return;
+    }
+
+    try {
+      setGenerateLoading(true);
+      // TODO: This will be implemented in the next prompt
+      // For now, just show the editor with the description as initial content
+      setContent(projectDescription);
+      setShowWizard(false);
+    } catch (error) {
+      console.error('Error generating SRS:', error);
+      alert('Failed to generate SRS');
+    } finally {
+      setGenerateLoading(false);
+    }
+  };
 
   const handleTextSelection = () => {
     const editor = quillRef.current.getEditor();
@@ -66,13 +93,11 @@ export default function SRSEditor() {
     }
   };
 
-  const [versions, setVersions] = useState([]);
-  const [currentVersion, setCurrentVersion] = useState(0);
-  const projectId = 'p1'; // In real app, get from route or context
-
   useEffect(() => {
-    loadProjectData();
-  }, []);
+    if (!showWizard) {
+      loadProjectData();
+    }
+  }, [showWizard]);
 
   const loadProjectData = async () => {
     try {
@@ -81,7 +106,9 @@ export default function SRSEditor() {
         axios.get(`/api/project/${projectId}/versions`)
       ]);
       
-      setContent(projectRes.data.srs_content || '');
+      if (!content) { // Only set if content is empty
+        setContent(projectRes.data.srs_content || '');
+      }
       setVersions(versionsRes.data);
       setCurrentVersion(versionsRes.data.length);
     } catch (error) {
@@ -185,10 +212,75 @@ export default function SRSEditor() {
     }
   };
 
+  const handleBackToWizard = () => {
+    setShowWizard(true);
+    setContent('');
+    setSelectedText('');
+    setInstruction('');
+    setSuggestion(null);
+  };
+
+  if (showWizard) {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">SRS Wizard</h1>
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Back to Home
+            </button>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Project Description</h2>
+            <p className="text-gray-600 mb-4">
+              Please provide a detailed description of your software project. Include information about:
+            </p>
+            <ul className="list-disc list-inside text-gray-600 mb-6 space-y-1">
+              <li>Project objectives and goals</li>
+              <li>Target users and stakeholders</li>
+              <li>Key features and functionality</li>
+              <li>Technical requirements and constraints</li>
+              <li>Any specific business requirements</li>
+            </ul>
+
+            <textarea
+              value={projectDescription}
+              onChange={(e) => setProjectDescription(e.target.value)}
+              placeholder="Enter your detailed project description here..."
+              className="w-full h-64 p-4 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleGenerateSRS}
+                disabled={generateLoading || !projectDescription.trim()}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {generateLoading ? 'Generating SRS...' : 'Generate SRS'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">SRS Editor</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">SRS Editor</h1>
+          <button
+            onClick={handleBackToWizard}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            New SRS
+          </button>
+        </div>
         <button
           onClick={handleExport}
           className="px-4 py-2 bg-green-500 text-white rounded"

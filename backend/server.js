@@ -138,11 +138,34 @@ app.post('/api/sdlc/recommend', async (req, res) => {
 
     const promptTemplate = await loadPrompt('sdlc_prompt.txt');
     const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', 
-      `${project_text}${constraints ? '\nConstraints: ' + JSON.stringify(constraints) : ''}`);
+      `${project_text}\n${constraints ? 'Constraints:\n' + JSON.stringify(constraints, null, 2) : ''}`);
 
     console.log('Calling LLM with prompt:', prompt);
     const rawResponse = await callLLM(prompt);
     console.log('Raw LLM response:', rawResponse);
+
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(rawResponse);
+    } catch (parseError) {
+      console.error('Failed to parse LLM response:', parseError);
+      throw new Error('Invalid JSON response from LLM');
+    }
+
+    // Basic validation before schema validation
+    if (!parsedResponse || typeof parsedResponse !== 'object') {
+      throw new Error('Invalid response format from LLM');
+    }
+
+    if (!parsedResponse.model || !parsedResponse.why) {
+      throw new Error('Missing required fields in LLM response');
+    }
+
+    // Validate model value
+    const validModels = ['Waterfall', 'Agile', 'Scrum', 'Kanban', 'Spiral', 'V-Model'];
+    if (!validModels.some(model => parsedResponse.model.includes(model))) {
+      throw new Error('Invalid SDLC model in response');
+    }
 
     const validated = await validateLLMResponse(
       rawResponse,
@@ -151,10 +174,22 @@ app.post('/api/sdlc/recommend', async (req, res) => {
     );
 
     await logInteraction(req.params.id || 'anonymous', '/api/sdlc/recommend', prompt, rawResponse, validated);
+
+    // Format confidence as a number between 0 and 1
+    if (validated.confidence) {
+      validated.confidence = Math.max(0, Math.min(1, Number(validated.confidence)));
+    } else {
+      validated.confidence = 0.5; // Default confidence if not provided
+    }
+
     res.json(validated);
   } catch (error) {
     console.error('SDLC recommendation error:', error);
-    res.status(500).json({ error: error.message || 'Internal server error' });
+    const errorMessage = error.message || 'Internal server error';
+    res.status(500).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

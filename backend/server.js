@@ -456,6 +456,273 @@ app.get('/api/project/:id/version/:version', (req, res) => {
   }
 });
 
+// Generate SRS questions based on project description
+app.post('/api/srs/generate-questions', async (req, res) => {
+  try {
+    const { project_description } = req.body;
+    
+    if (!project_description) {
+      return res.status(400).json({ error: 'Project description is required' });
+    }
+
+    const promptTemplate = await loadPrompt('srs_generate_prompt.txt');
+    const prompt = promptTemplate.replace('<<<PROJECT_DESCRIPTION>>>', project_description);
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = JSON.parse(rawResponse);
+
+    // Validate the response structure
+    if (!parsed.sections || !Array.isArray(parsed.sections)) {
+      throw new Error('Invalid response structure from LLM');
+    }
+
+    await logInteraction('srs_questions', '/api/srs/generate-questions', prompt, rawResponse, parsed);
+    res.json(parsed);
+  } catch (error) {
+    console.error('SRS questions generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate content for a specific section based on Q&A
+app.post('/api/srs/generate-content', async (req, res) => {
+  try {
+    const { section_title, subsection_title, qa_pairs } = req.body;
+    
+    if (!section_title || !subsection_title || !qa_pairs) {
+      return res.status(400).json({ error: 'Section details and Q&A pairs are required' });
+    }
+
+    const promptTemplate = await loadPrompt('srs_content_prompt.txt');
+    const qaText = qa_pairs.map((qa, index) => 
+      `Q${index + 1}: ${qa.question}\nA${index + 1}: ${qa.answer}`
+    ).join('\n\n');
+
+    const prompt = promptTemplate
+      .replace('<<<SECTION_TITLE>>>', section_title)
+      .replace('<<<SUBSECTION_TITLE>>>', subsection_title)
+      .replace('<<<QA_PAIRS>>>', qaText);
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = JSON.parse(rawResponse);
+
+    // Validate the response
+    if (!parsed.content) {
+      throw new Error('No content generated');
+    }
+
+    await logInteraction('srs_content', '/api/srs/generate-content', prompt, rawResponse, parsed);
+    res.json(parsed);
+  } catch (error) {
+    console.error('SRS content generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save SRS section content
+app.post('/api/srs/save-section', async (req, res) => {
+  try {
+    const { project_id, section_id, subsection_id, content, status } = req.body;
+    
+
+
+    if (!project_id || !section_id || !subsection_id || !content) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Create SRS sections table if it doesn't exist
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS srs_sections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id TEXT,
+        section_id TEXT,
+        subsection_id TEXT,
+        content TEXT,
+        status TEXT DEFAULT 'draft',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(project_id) REFERENCES projects(id),
+        UNIQUE(project_id, section_id, subsection_id)
+      );
+    `);
+
+    // Normalize IDs by converting dots to underscores
+    const normalizedSectionId = section_id.replace(/\./g, '_');
+    const normalizedSubsectionId = subsection_id.replace(/\./g, '_');
+    
+    // Insert or update section content
+    const result = db.prepare(`
+      INSERT OR REPLACE INTO srs_sections 
+      (project_id, section_id, subsection_id, content, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(project_id, normalizedSectionId, normalizedSubsectionId, content, status || 'approved');
+
+
+
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (error) {
+    console.error('Save section error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all sections for a project
+app.get('/api/srs/sections/:project_id', (req, res) => {
+  try {
+    const sections = db.prepare(`
+      SELECT * FROM srs_sections 
+      WHERE project_id = ? 
+      ORDER BY section_id, subsection_id
+    `).all(req.params.project_id);
+
+    res.json(sections);
+  } catch (error) {
+    console.error('Get sections error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate final SRS document (supports partial completion)
+app.post('/api/srs/generate-final/:project_id', async (req, res) => {
+  try {
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.project_id);
+    const sections = db.prepare(`
+      SELECT * FROM srs_sections 
+      WHERE project_id = ? AND status = 'approved'
+      ORDER BY section_id, subsection_id
+    `).all(req.params.project_id);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Define the complete SRS structure
+    const srsStructure = {
+      '1_introduction': {
+        title: '1. Introduction',
+        subsections: {
+          '1_1_purpose': '1.1 Purpose',
+          '1_2_scope': '1.2 Scope', 
+          '1_3_definitions': '1.3 Definitions, Acronyms and Abbreviations',
+          '1_4_references': '1.4 References',
+          '1_5_overview': '1.5 Overview'
+        }
+      },
+      '2_overall_description': {
+        title: '2. Overall Description',
+        subsections: {
+          '2_1_product_perspective': '2.1 Product Perspective',
+          '2_2_product_functions': '2.2 Product Functions',
+          '2_3_user_characteristics': '2.3 User Characteristics',
+          '2_4_constraints': '2.4 Constraints',
+          '2_5_assumptions': '2.5 Assumptions and Dependencies'
+        }
+      },
+      '3_specific_requirements': {
+        title: '3. Specific Requirements',
+        subsections: {
+          '3_1_external_interfaces': '3.1 External Interfaces',
+          '3_2_functions': '3.2 Functions',
+          '3_3_performance': '3.3 Performance Requirements',
+          '3_4_logical_database': '3.4 Logical Database Requirements',
+          '3_5_design_constraints': '3.5 Design Constraints',
+          '3_6_software_attributes': '3.6 Software System Attributes'
+        }
+      }
+    };
+
+    // Create sections map for quick lookup
+    const sectionsMap = {};
+    sections.forEach(section => {
+      // Store both possible key formats to handle different ID structures
+      const key1 = `${section.section_id}_${section.subsection_id}`;
+      const key2 = `${section.section_id}_${section.subsection_id.replace(/\./g, '_')}`;
+      sectionsMap[key1] = section.content;
+      sectionsMap[key2] = section.content;
+
+    });
+
+    // Generate complete SRS with placeholders for missing sections
+    let finalContent = `Software Requirements Specification\n`;
+    finalContent += `Project: ${project.title || 'Untitled Project'}\n`;
+    finalContent += `Generated on: ${new Date().toLocaleDateString()}\n\n`;
+
+    // Add project description if available
+    if (project.project_text) {
+      finalContent += `Project Description:\n${project.project_text}\n\n`;
+    }
+
+    // Generate content for each section
+    Object.entries(srsStructure).forEach(([sectionId, section]) => {
+      finalContent += `${section.title}\n${'='.repeat(section.title.length)}\n\n`;
+      
+      Object.entries(section.subsections).forEach(([subsectionId, subsectionTitle]) => {
+        finalContent += `${subsectionTitle}\n${'-'.repeat(subsectionTitle.length)}\n`;
+        
+        const contentKey = `${sectionId}_${subsectionId}`;
+        const content = sectionsMap[contentKey];
+        
+
+        
+        if (content) {
+          finalContent += `${content}\n\n`;
+        } else {
+          finalContent += `[This section is pending completion]\n\n`;
+        }
+      });
+    });
+
+    // Update project with current SRS content
+    db.prepare(`
+      UPDATE projects 
+      SET srs_content = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(finalContent, req.params.project_id);
+
+    res.json({ 
+      content: finalContent,
+      completedSections: sections.length,
+      totalSections: Object.values(srsStructure).reduce((total, section) => 
+        total + Object.keys(section.subsections).length, 0)
+    });
+  } catch (error) {
+    console.error('Generate final SRS error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current SRS document status
+app.get('/api/srs/status/:project_id', async (req, res) => {
+  try {
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.project_id);
+    const sections = db.prepare(`
+      SELECT * FROM srs_sections 
+      WHERE project_id = ? AND status = 'approved'
+      ORDER BY section_id, subsection_id
+    `).all(req.params.project_id);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const totalSections = 16; // Total expected sections based on IEEE standard
+    const completedSections = sections.length;
+    const completionPercentage = Math.round((completedSections / totalSections) * 100);
+
+    res.json({
+      project: project,
+      completedSections: completedSections,
+      totalSections: totalSections,
+      completionPercentage: completionPercentage,
+      sections: sections,
+      canExport: completedSections > 0
+    });
+  } catch (error) {
+    console.error('Get SRS status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const { createProjectDocument } = require('./services/docx-generator');
 
 app.post('/api/project/:id/export', async (req, res) => {

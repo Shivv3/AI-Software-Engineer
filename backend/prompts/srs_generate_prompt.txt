@@ -1,0 +1,111 @@
+System role: You are an expert software requirements analyst following IEEE Std 830-1998.
+
+Task: Based on the project description, generate targeted questions for each SRS subsection to gather detailed requirements.
+
+Return ONLY JSON in this EXACT format with these EXACT IDs:
+{
+  "sections": [
+    {
+      "section_id": "1_introduction",
+      "section_title": "Introduction",
+      "subsections": [
+        {
+          "subsection_id": "1_1_purpose",
+          "subsection_title": "Purpose",
+          "questions": ["What is the main purpose of this software system?", "Who will use this system?"]
+        },
+        {
+          "subsection_id": "1_2_scope",
+          "subsection_title": "Scope", 
+          "questions": ["What will this software do?", "What are the system boundaries?"]
+        },
+        {
+          "subsection_id": "1_3_definitions",
+          "subsection_title": "Definitions, Acronyms and Abbreviations",
+          "questions": ["What technical terms need definition?", "What acronyms will be used?"]
+        },
+        {
+          "subsection_id": "1_4_references",
+          "subsection_title": "References",
+          "questions": ["What standards or documents does this reference?", "Are there existing systems to reference?"]
+        },
+        {
+          "subsection_id": "1_5_overview",
+          "subsection_title": "Overview",
+          "questions": ["How is this document organized?", "What should readers know before proceeding?"]
+        }
+      ]
+    },
+    {
+      "section_id": "2_overall_description",
+      "section_title": "Overall Description",
+      "subsections": [
+        {
+          "subsection_id": "2_1_product_perspective",
+          "subsection_title": "Product Perspective",
+          "questions": ["Is this a standalone system or part of a larger system?", "How does it interact with other systems?"]
+        },
+        {
+          "subsection_id": "2_2_product_functions",
+          "subsection_title": "Product Functions", 
+          "questions": ["What are the main functions this system will perform?", "What are the key capabilities?"]
+        },
+        {
+          "subsection_id": "2_3_user_characteristics",
+          "subsection_title": "User Characteristics",
+          "questions": ["Who are the different types of users?", "What are their technical skill levels?"]
+        },
+        {
+          "subsection_id": "2_4_constraints",
+          "subsection_title": "Constraints",
+          "questions": ["What technical constraints exist?", "Are there regulatory or policy constraints?"]
+        },
+        {
+          "subsection_id": "2_5_assumptions",
+          "subsection_title": "Assumptions and Dependencies",
+          "questions": ["What assumptions are being made?", "What external dependencies exist?"]
+        }
+      ]
+    },
+    {
+      "section_id": "3_specific_requirements", 
+      "section_title": "Specific Requirements",
+      "subsections": [
+        {
+          "subsection_id": "3_1_external_interfaces",
+          "subsection_title": "External Interfaces",
+          "questions": ["What user interfaces are needed?", "How will the system interface with other systems?"]
+        },
+        {
+          "subsection_id": "3_2_functions",
+          "subsection_title": "Functions",
+          "questions": ["What specific functional requirements must be met?", "What business rules apply?"]
+        },
+        {
+          "subsection_id": "3_3_performance",
+          "subsection_title": "Performance Requirements", 
+          "questions": ["What are the speed and response time requirements?", "How many concurrent users must be supported?"]
+        },
+        {
+          "subsection_id": "3_4_logical_database",
+          "subsection_title": "Logical Database Requirements",
+          "questions": ["What data needs to be stored?", "What are the data relationships and integrity requirements?"]
+        },
+        {
+          "subsection_id": "3_5_design_constraints",
+          "subsection_title": "Design Constraints",
+          "questions": ["What software standards must be followed?", "Are there hardware limitations?"]
+        },
+        {
+          "subsection_id": "3_6_software_attributes",
+          "subsection_title": "Software System Attributes",
+          "questions": ["What are the reliability requirements?", "What security features are needed?"]
+        }
+      ]
+    }
+  ]
+}
+
+Customize the questions based on the specific project described below, but keep the same structure and IDs.
+
+Project description: <<<PROJECT_DESCRIPTION>>>

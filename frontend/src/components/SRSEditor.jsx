@@ -3,29 +3,33 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import axios from 'axios';
 
-const COMMON_PROMPTS = [
-  "Improve clarity",
-  "Add acceptance criteria",
-  "Add security NFR",
-  "Make more specific",
-  "Add examples",
-  "Add constraints"
-];
+const SECTION_MAPPING = {
+  '1_introduction': 'Introduction',
+  '2_overall_description': 'Overall Description', 
+  '3_specific_requirements': 'Specific Requirements'
+};
 
 export default function SRSEditor() {
-  const [showWizard, setShowWizard] = useState(true);
+  const [currentStep, setCurrentStep] = useState('description'); // 'description', 'questions', 'review', 'progress'
   const [projectDescription, setProjectDescription] = useState('');
-  const [content, setContent] = useState('');
-  const [selectedText, setSelectedText] = useState('');
-  const [instruction, setInstruction] = useState('');
-  const [suggestion, setSuggestion] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
-  const quillRef = useRef();
-
-  const [versions, setVersions] = useState([]);
-  const [currentVersion, setCurrentVersion] = useState(0);
-  const projectId = 'p1'; // In real app, get from route or context
+  const [projectId, setProjectId] = useState(null);
+  
+  // Questions and answers state
+  const [srsStructure, setSrsStructure] = useState([]);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [currentSubsectionIndex, setCurrentSubsectionIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  
+  // Content generation state
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [contentLoading, setContentLoading] = useState(false);
+  const [savedSections, setSavedSections] = useState([]);
+  const [finalSrsContent, setFinalSrsContent] = useState('');
+  
+  // Progress tracking state
+  const [srsStatus, setSrsStatus] = useState(null);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const handleGenerateSRS = async () => {
     if (!projectDescription.trim()) {
@@ -35,192 +39,232 @@ export default function SRSEditor() {
 
     try {
       setGenerateLoading(true);
-      // TODO: This will be implemented in the next prompt
-      // For now, just show the editor with the description as initial content
-      setContent(projectDescription);
-      setShowWizard(false);
+      
+      // Create project
+      const projectRes = await axios.post('/api/project', {
+        title: 'SRS Project',
+        project_text: projectDescription
+      });
+      
+      setProjectId(projectRes.data.id);
+      
+      // Generate questions
+      const questionsRes = await axios.post('/api/srs/generate-questions', {
+        project_description: projectDescription
+      });
+      
+      setSrsStructure(questionsRes.data.sections);
+      setCurrentStep('questions');
+      
     } catch (error) {
-      console.error('Error generating SRS:', error);
-      alert('Failed to generate SRS');
+      console.error('Error generating SRS questions:', error);
+      alert('Failed to generate SRS questions');
     } finally {
       setGenerateLoading(false);
     }
   };
 
-  const handleTextSelection = () => {
-    const editor = quillRef.current.getEditor();
-    const range = editor.getSelection();
-    if (range && range.length > 0) {
-      const text = editor.getText(range.index, range.length);
-      setSelectedText(text);
+  const getCurrentSubsection = () => {
+    if (!srsStructure[currentSectionIndex] || !srsStructure[currentSectionIndex].subsections[currentSubsectionIndex]) {
+      return null;
     }
+    return srsStructure[currentSectionIndex].subsections[currentSubsectionIndex];
   };
 
-  const handleSuggest = async () => {
-    if (!selectedText || !instruction) return;
-
-    const editor = quillRef.current.getEditor();
-    const range = editor.getSelection();
-    const fullContent = editor.getText();
-
-    try {
-      setLoading(true);
-      const response = await axios.post('/api/srs/edit', {
-        project_id: projectId,
-        selected_text: selectedText,
-        instruction,
-        selection_start: range?.index,
-        selection_end: range ? range.index + range.length : null,
-        full_content: fullContent
-      });
-      setSuggestion(response.data);
-    } catch (error) {
-      console.error('Error getting suggestion:', error);
-      alert(error.response?.data?.error || 'Failed to get suggestion');
-    } finally {
-      setLoading(false);
-    }
+  const getAnswerKey = (sectionId, subsectionId) => {
+    return `${sectionId.replace(/\./g, '_')}_${subsectionId.replace(/\./g, '_')}`;
   };
 
-  const loadVersion = async (version) => {
-    try {
-      const response = await axios.get(`/api/project/${projectId}/version/${version}`);
-      setContent(response.data.srs_content);
-      setCurrentVersion(version);
-    } catch (error) {
-      console.error('Error loading version:', error);
-      alert('Failed to load version');
-    }
-  };
+  const handleAnswerChange = (questionIndex, answer) => {
+    const subsection = getCurrentSubsection();
+    if (!subsection) return;
 
-  useEffect(() => {
-    if (!showWizard) {
-      loadProjectData();
-    }
-  }, [showWizard]);
-
-  const loadProjectData = async () => {
-    try {
-      const [projectRes, versionsRes] = await Promise.all([
-        axios.get(`/api/project/${projectId}`),
-        axios.get(`/api/project/${projectId}/versions`)
-      ]);
-      
-      if (!content) { // Only set if content is empty
-        setContent(projectRes.data.srs_content || '');
-      }
-      setVersions(versionsRes.data);
-      setCurrentVersion(versionsRes.data.length);
-    } catch (error) {
-      console.error('Error loading project data:', error);
-    }
-  };
-
-  const findAllOccurrences = (text, search) => {
-    const results = [];
-    let index = 0;
-    while ((index = text.indexOf(search, index)) !== -1) {
-      results.push(index);
-      index += 1;
-    }
-    return results;
-  };
-
-  const applySuggestion = async () => {
-    const editor = quillRef.current.getEditor();
-    const range = editor.getSelection();
+    const answerKey = getAnswerKey(srsStructure[currentSectionIndex].section_id, subsection.subsection_id);
     
-    if (range && suggestion) {
-      try {
-        const fullContent = editor.getText();
-        const selectedText = fullContent.slice(range.index, range.index + range.length);
-        
-        // Check for multiple occurrences
-        const occurrences = findAllOccurrences(fullContent, selectedText);
-        
-        if (occurrences.length > 1) {
-          const shouldReplace = window.confirm(
-            `Found ${occurrences.length} occurrences of the selected text. Replace at current position only?`
-          );
-          if (!shouldReplace) return;
-        }
-
-        // Store current state for undo
-        const originalContent = editor.getText();
-        
-        // Apply the change
-        editor.deleteText(range.index, range.length);
-        editor.insertText(range.index, suggestion.suggestion_text);
-        
-        // Get the new content
-        const newContent = editor.getText();
-
-        // Save the new version
-        await axios.post('/api/srs/apply', {
-          project_id: projectId,
-          srs_content: newContent,
-          prompt_text: instruction,
-          suggestion_text: suggestion.suggestion_text,
-          selection_start: range.index,
-          selection_end: range.index + suggestion.suggestion_text.length,
-          original_content: originalContent
-        });
-
-        // Refresh versions
-        const versionsRes = await axios.get(`/api/project/${projectId}/versions`);
-        setVersions(versionsRes.data);
-        setCurrentVersion(versionsRes.data.length);
-
-        // Clear UI state
-        setSuggestion(null);
-        setSelectedText('');
-        setInstruction('');
-      } catch (error) {
-        console.error('Error applying suggestion:', error);
-        alert('Failed to save changes');
+    setAnswers(prev => ({
+      ...prev,
+      [answerKey]: {
+        ...prev[answerKey],
+        [questionIndex]: answer
       }
-    }
+    }));
   };
 
-  const handleUndo = async () => {
-    if (currentVersion > 1) {
-      try {
-        await loadVersion(currentVersion - 1);
-      } catch (error) {
-        console.error('Error undoing change:', error);
-        alert('Failed to undo');
-      }
-    }
+  const isSubsectionComplete = () => {
+    const subsection = getCurrentSubsection();
+    if (!subsection) return false;
+
+    const answerKey = getAnswerKey(srsStructure[currentSectionIndex].section_id, subsection.subsection_id);
+    const subsectionAnswers = answers[answerKey] || {};
+    
+    return subsection.questions.every((_, index) => 
+      subsectionAnswers[index] && subsectionAnswers[index].trim().length > 0
+    );
   };
 
-  const handleExport = async () => {
+  const handleGenerateContent = async () => {
+    const subsection = getCurrentSubsection();
+    if (!subsection || !isSubsectionComplete()) return;
+
     try {
-      const response = await axios.post('/api/project/current/export', {}, {
+      setContentLoading(true);
+      
+      const answerKey = getAnswerKey(srsStructure[currentSectionIndex].section_id, subsection.subsection_id);
+      const subsectionAnswers = answers[answerKey] || {};
+      
+      const qaPairs = subsection.questions.map((question, index) => ({
+        question,
+        answer: subsectionAnswers[index] || ''
+      }));
+
+      const response = await axios.post('/api/srs/generate-content', {
+        section_title: srsStructure[currentSectionIndex].section_title,
+        subsection_title: subsection.subsection_title,
+        qa_pairs: qaPairs
+      });
+
+      setGeneratedContent(response.data.content);
+    } catch (error) {
+      console.error('Error generating content:', error);
+      alert('Failed to generate content');
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const handleSaveContent = async () => {
+    const subsection = getCurrentSubsection();
+    if (!subsection || !generatedContent) return;
+
+    try {
+      const saveData = {
+        project_id: projectId,
+        section_id: srsStructure[currentSectionIndex].section_id.replace(/\./g, '_'),
+        subsection_id: subsection.subsection_id.replace(/\./g, '_'),
+        content: generatedContent,
+        status: 'approved'
+      };
+      
+      await axios.post('/api/srs/save-section', saveData);
+
+      const sectionKey = `${srsStructure[currentSectionIndex].section_id.replace(/\./g, '_')}_${subsection.subsection_id.replace(/\./g, '_')}`;
+      setSavedSections(prev => [...prev.filter(s => s !== sectionKey), sectionKey]);
+      
+      // Immediately refresh the SRS document to show the new content
+      await loadSrsStatus();
+      
+      // Move to next subsection
+      handleNextSubsection();
+      setGeneratedContent('');
+      
+
+    } catch (error) {
+      console.error('Error saving content:', error);
+      alert('Failed to save content');
+    }
+  };
+
+  const handleNextSubsection = () => {
+    const section = srsStructure[currentSectionIndex];
+    
+    if (currentSubsectionIndex < section.subsections.length - 1) {
+      setCurrentSubsectionIndex(prev => prev + 1);
+    } else if (currentSectionIndex < srsStructure.length - 1) {
+      setCurrentSectionIndex(prev => prev + 1);
+      setCurrentSubsectionIndex(0);
+    } else {
+      // All sections complete
+      setCurrentStep('review');
+      generateFinalSRS();
+    }
+  };
+
+  const handlePreviousSubsection = () => {
+    if (currentSubsectionIndex > 0) {
+      setCurrentSubsectionIndex(prev => prev - 1);
+    } else if (currentSectionIndex > 0) {
+      setCurrentSectionIndex(prev => prev - 1);
+      setCurrentSubsectionIndex(srsStructure[currentSectionIndex - 1].subsections.length - 1);
+    }
+  };
+
+  const generateFinalSRS = async () => {
+    try {
+      const response = await axios.post(`/api/srs/generate-final/${projectId}`);
+      setFinalSrsContent(response.data.content);
+      setSrsStatus(prev => ({
+        ...prev,
+        completedSections: response.data.completedSections,
+        totalSections: response.data.totalSections
+      }));
+    } catch (error) {
+      console.error('Error generating final SRS:', error);
+      alert('Failed to generate final SRS');
+    }
+  };
+
+  const loadSrsStatus = async () => {
+    if (!projectId) return;
+    
+    try {
+      const response = await axios.get(`/api/srs/status/${projectId}`);
+      setSrsStatus(response.data);
+      
+      // Also generate current SRS content
+      const srsResponse = await axios.post(`/api/srs/generate-final/${projectId}`);
+      setFinalSrsContent(srsResponse.data.content);
+    } catch (error) {
+      console.error('Error loading SRS status:', error);
+    }
+  };
+
+  const handleExportSRS = async () => {
+    if (!projectId) return;
+    
+    try {
+      setExportLoading(true);
+      
+      // First generate/update the current SRS content
+      await generateFinalSRS();
+      
+      // Then export it
+      const response = await axios.post(`/api/project/${projectId}/export`, {}, {
         responseType: 'blob'
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'srs-document.docx');
+      link.setAttribute('download', `SRS-${new Date().toISOString().split('T')[0]}.docx`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
     } catch (error) {
-      console.error('Error exporting document:', error);
-      alert('Failed to export document');
+      console.error('Error exporting SRS:', error);
+      alert('Failed to export SRS');
+    } finally {
+      setExportLoading(false);
     }
   };
 
-  const handleBackToWizard = () => {
-    setShowWizard(true);
-    setContent('');
-    setSelectedText('');
-    setInstruction('');
-    setSuggestion(null);
+  // Load SRS status when projectId changes
+  useEffect(() => {
+    if (projectId && (currentStep === 'questions' || currentStep === 'progress' || currentStep === 'review')) {
+      loadSrsStatus();
+    }
+  }, [projectId, savedSections.length]);
+
+  const getProgressPercentage = () => {
+    if (!srsStructure.length) return 0;
+    
+    const totalSubsections = srsStructure.reduce((total, section) => 
+      total + section.subsections.length, 0);
+    
+    return Math.round((savedSections.length / totalSubsections) * 100);
   };
 
-  if (showWizard) {
+  // Wizard Step - Project Description
+  if (currentStep === 'description') {
     return (
       <div className="container mx-auto p-4">
         <div className="max-w-4xl mx-auto">
@@ -237,7 +281,7 @@ export default function SRSEditor() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Project Description</h2>
             <p className="text-gray-600 mb-4">
-              Please provide a detailed description of your software project. Include information about:
+              Please provide a detailed description of your software project. This will be used to generate targeted questions for each section of the SRS document following IEEE Std 830-1998.
             </p>
             <ul className="list-disc list-inside text-gray-600 mb-6 space-y-1">
               <li>Project objectives and goals</li>
@@ -260,7 +304,7 @@ export default function SRSEditor() {
                 disabled={generateLoading || !projectDescription.trim()}
                 className="px-6 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {generateLoading ? 'Generating SRS...' : 'Generate SRS'}
+                {generateLoading ? 'Generating Questions...' : 'Generate SRS Questions'}
               </button>
             </div>
           </div>
@@ -269,179 +313,486 @@ export default function SRSEditor() {
     );
   }
 
-  return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">SRS Editor</h1>
-          <button
-            onClick={handleBackToWizard}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            New SRS
-          </button>
-        </div>
-        <button
-          onClick={handleExport}
-          className="px-4 py-2 bg-green-500 text-white rounded"
-        >
-          Export to DOCX
-        </button>
-      </div>
+  // Questions Step
+  if (currentStep === 'questions') {
+    const subsection = getCurrentSubsection();
+    if (!subsection) return <div>Loading...</div>;
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <div className="mb-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold">Version {currentVersion}</h2>
-                <button
-                  onClick={handleUndo}
-                  className="btn btn-secondary"
-                  disabled={currentVersion <= 1}
-                  title="Undo last change"
-                >
-                  Undo
-                </button>
-              </div>
-              <div className="flex gap-2">
-                {versions.length > 0 && (
+    const answerKey = getAnswerKey(srsStructure[currentSectionIndex].section_id, subsection.subsection_id);
+    const subsectionAnswers = answers[answerKey] || {};
+
+    return (
+      <div className="container mx-auto p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">SRS Question & Answer</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep('description')}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Back to Description
+              </button>
+              {savedSections.length > 0 && (
+                <>
                   <button
-                    onClick={() => loadVersion(versions[0].version)}
-                    className="btn btn-secondary"
-                    disabled={currentVersion === versions[0].version}
+                    onClick={() => setCurrentStep('progress')}
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                   >
-                    Latest Version
+                    View Progress
                   </button>
-                )}
-              </div>
-            </div>
-            {suggestion && (
-              <div className="mt-2 p-2 bg-yellow-50 rounded text-sm">
-                Note: {suggestion.explanation || 'Reviewing suggested changes'}
-                {suggestion.confidence && (
-                  <div className="mt-1">
-                    Confidence: {(suggestion.confidence * 100).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <ReactQuill
-            ref={quillRef}
-            value={content}
-            onChange={setContent}
-            onChangeSelection={handleTextSelection}
-            className="h-[600px] mb-12"
-          />
-        </div>
-
-        <div className="space-y-4">
-          <div className="card">
-            <h3 className="font-semibold mb-3">Version History</h3>
-            <div className="max-h-[200px] overflow-y-auto">
-              {versions.map((ver) => (
-                <div
-                  key={ver.version}
-                  className={`p-2 mb-2 rounded cursor-pointer hover:bg-gray-50 ${
-                    currentVersion === ver.version ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => loadVersion(ver.version)}
+                  <button
+                    onClick={() => setCurrentStep('review')}
+                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                  >
+                    Final Review
+                  </button>
+                </>
+              )}
+              {savedSections.length > 0 && (
+                <button
+                  onClick={handleExportSRS}
+                  disabled={exportLoading}
+                  className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-medium">v{ver.version}</span>
-                      <span className="text-sm text-gray-600 ml-2">
-                        {new Date(ver.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                    <span className={`badge ${
-                      ver.editor === 'assistant' ? 'badge-purple' : 'badge-blue'
-                    }`}>
-                      {ver.editor}
-                    </span>
-                  </div>
-                  {ver.prompt_text && (
-                    <p className="text-sm text-gray-600 mt-1">{ver.prompt_text}</p>
-                  )}
-                </div>
-              ))}
+                  {exportLoading ? 'Exporting...' : 'Export DOCX'}
+                </button>
+              )}
             </div>
           </div>
-          {selectedText && (
-            <div className="p-4 border rounded bg-white sticky top-4">
-              <h3 className="font-semibold mb-2">Edit Selection</h3>
-              <p className="text-sm mb-4 bg-gray-50 p-2 rounded">
-                {selectedText}
-              </p>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">
-                  Common Instructions
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {COMMON_PROMPTS.map(prompt => (
+          {/* Progress bar */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
+              <span>Progress: {getProgressPercentage()}% Complete</span>
+              <div className="flex items-center gap-4">
+                <span>{savedSections.length} / {srsStructure.reduce((total, section) => total + section.subsections.length, 0)} sections</span>
+                {savedSections.length > 0 && (
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                    Document Available
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                style={{ width: `${getProgressPercentage()}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Questions Panel */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold">
+                    {srsStructure[currentSectionIndex].section_title}
+                  </h2>
+                  <h3 className="text-lg text-gray-600">
+                    {subsection.subsection_title}
+                  </h3>
+                </div>
+
+                <div className="space-y-6">
+                  {subsection.questions.map((question, index) => (
+                    <div key={index} className="border-l-4 border-blue-500 pl-4">
+                      <label className="block text-sm font-medium mb-2">
+                        Question {index + 1}:
+                      </label>
+                      <p className="text-gray-700 mb-3">{question}</p>
+                      <textarea
+                        value={subsectionAnswers[index] || ''}
+                        onChange={(e) => handleAnswerChange(index, e.target.value)}
+                        placeholder="Enter your answer here..."
+                        className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex justify-between">
+                  <button
+                    onClick={handlePreviousSubsection}
+                    disabled={currentSectionIndex === 0 && currentSubsectionIndex === 0}
+                    className="px-4 py-2 bg-gray-500 text-white rounded disabled:bg-gray-300"
+                  >
+                    Previous
+                  </button>
+                  
+                  <button
+                    onClick={handleGenerateContent}
+                    disabled={!isSubsectionComplete() || contentLoading}
+                    className="px-6 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
+                  >
+                    {contentLoading ? 'Generating...' : 'Generate Content'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Content Preview Panel */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Generated Content</h3>
+                
+                {generatedContent ? (
+                  <div>
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg max-h-96 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap text-sm">{generatedContent}</pre>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveContent}
+                        className="px-4 py-2 bg-green-500 text-white rounded flex-1"
+                      >
+                        Accept & Continue
+                      </button>
+                      <button
+                        onClick={() => setGeneratedContent('')}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">
+                    {contentLoading ? 'Generating content...' : 'Answer all questions to generate content'}
+                  </p>
+                )}
+              </div>
+
+              {/* Quick Actions */}
+              {savedSections.length > 0 && (
+                <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+                  <div className="flex flex-col gap-2">
                     <button
-                      key={prompt}
-                      onClick={() => setInstruction(prompt)}
-                      className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                      onClick={() => setCurrentStep('progress')}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
                     >
-                      {prompt}
+                      📊 View Progress & Document
                     </button>
+                    <button
+                      onClick={handleExportSRS}
+                      disabled={exportLoading}
+                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm disabled:bg-gray-400"
+                    >
+                      💾 {exportLoading ? 'Exporting...' : 'Quick Export'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Section Navigation */}
+              <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Section Navigation</h3>
+                <div className="space-y-2">
+                  {srsStructure.map((section, sectionIndex) => (
+                    <div key={section.section_id}>
+                      <div className="font-medium text-gray-700">{section.section_title}</div>
+                      {section.subsections.map((subsec, subsecIndex) => {
+                        const isCurrentSubsection = sectionIndex === currentSectionIndex && subsecIndex === currentSubsectionIndex;
+                        const sectionKey = `${section.section_id.replace(/\./g, '_')}_${subsec.subsection_id.replace(/\./g, '_')}`;
+                        const isSaved = savedSections.includes(sectionKey);
+                        
+                        return (
+                          <div
+                            key={subsec.subsection_id}
+                            className={`ml-4 p-2 rounded cursor-pointer text-sm ${
+                              isCurrentSubsection 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : isSaved 
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'hover:bg-gray-100'
+                            }`}
+                            onClick={() => {
+                              setCurrentSectionIndex(sectionIndex);
+                              setCurrentSubsectionIndex(subsecIndex);
+                              setGeneratedContent('');
+                            }}
+                          >
+                            {isSaved ? '✓ ' : ''}{subsec.subsection_title}
+                          </div>
+                        );
+                      })}
+                    </div>
                   ))}
                 </div>
               </div>
-
-              <input
-                type="text"
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="Enter instruction..."
-                className="w-full p-2 border rounded mb-2"
-              />
-
-              <button
-                onClick={handleSuggest}
-                disabled={!instruction || loading}
-                className="w-full px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
-              >
-                {loading ? 'Getting suggestion...' : 'Suggest'}
-              </button>
             </div>
-          )}
-
-          {suggestion && (
-            <div className="p-4 border rounded bg-white mt-4">
-              <h3 className="font-semibold mb-2">Suggestion</h3>
-              <p className="text-sm mb-2">{suggestion.suggestion_text}</p>
-              {suggestion.explanation && (
-                <p className="text-xs text-gray-600 mb-2">
-                  {suggestion.explanation}
-                </p>
-              )}
-              {suggestion.confidence && (
-                <p className="text-xs text-gray-600 mb-4">
-                  Confidence: {(suggestion.confidence * 100).toFixed(1)}%
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={applySuggestion}
-                  className="px-4 py-2 bg-green-500 text-white rounded"
-                >
-                  Apply
-                </button>
-                <button
-                  onClick={() => setSuggestion(null)}
-                  className="px-4 py-2 bg-gray-500 text-white rounded"
-                >
-                  Discard
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Progress View Step
+  if (currentStep === 'progress') {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">SRS Progress View</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep('questions')}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Continue Questions
+              </button>
+              <button
+                onClick={() => setCurrentStep('review')}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                Final Review
+              </button>
+              <button
+                onClick={handleExportSRS}
+                disabled={exportLoading || !savedSections.length}
+                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
+              >
+                {exportLoading ? 'Exporting...' : 'Export Current SRS'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Progress Stats */}
+            <div className="lg:col-span-1 space-y-4">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Progress Overview</h3>
+                
+                {srsStatus && (
+                  <>
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>Completion</span>
+                        <span>{srsStatus.completionPercentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-green-500 h-3 rounded-full transition-all duration-300" 
+                          style={{ width: `${srsStatus.completionPercentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Completed Sections:</span>
+                        <span className="font-medium">{srsStatus.completedSections}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Sections:</span>
+                        <span className="font-medium">{srsStatus.totalSections}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Remaining:</span>
+                        <span className="font-medium">{srsStatus.totalSections - srsStatus.completedSections}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        {srsStatus.completionPercentage === 100 
+                          ? '🎉 SRS Complete! Ready for final review.' 
+                          : `📝 ${srsStatus.totalSections - srsStatus.completedSections} sections remaining`}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Section Status */}
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Section Status</h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {srsStructure.map((section, sectionIndex) => (
+                    <div key={section.section_id} className="border-l-2 border-gray-200 pl-3">
+                      <div className="font-medium text-gray-700 text-sm">{section.section_title}</div>
+                      {section.subsections.map((subsec, subsecIndex) => {
+                        const sectionKey = `${section.section_id.replace(/\./g, '_')}_${subsec.subsection_id.replace(/\./g, '_')}`;
+                        const isSaved = savedSections.includes(sectionKey);
+                        const isCurrentSubsection = sectionIndex === currentSectionIndex && subsecIndex === currentSubsectionIndex;
+                        
+                        return (
+                          <div
+                            key={subsec.subsection_id}
+                            className={`ml-2 p-1 text-xs flex items-center gap-2 ${
+                              isSaved ? 'text-green-600' : 'text-gray-500'
+                            }`}
+                          >
+                            {isSaved ? (
+                              <span className="text-green-500">✓</span>
+                            ) : (
+                              <span className="text-gray-400">○</span>
+                            )}
+                            <span className={isCurrentSubsection ? 'font-medium' : ''}>
+                              {subsec.subsection_title}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Document Preview */}
+            <div className="lg:col-span-3">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-semibold">Current SRS Document</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => loadSrsStatus()}
+                      className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleExportSRS}
+                      disabled={exportLoading || !savedSections.length}
+                      className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+                    >
+                      {exportLoading ? 'Exporting...' : 'Download DOCX'}
+                    </button>
+                  </div>
+                </div>
+
+                {finalSrsContent ? (
+                  <div className="border border-gray-300 rounded-lg">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-300 flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Document Preview</span>
+                      <span className="text-xs text-gray-500">
+                        Last updated: {new Date().toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="p-6 max-h-[600px] overflow-y-auto bg-white">
+                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                        {finalSrsContent}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading document preview...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setCurrentStep('questions')}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                📝 Continue Editing
+              </button>
+              <button
+                onClick={() => setCurrentStep('review')}
+                disabled={savedSections.length === 0}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+              >
+                👀 Final Review
+              </button>
+              <button
+                onClick={handleExportSRS}
+                disabled={exportLoading || !savedSections.length}
+                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
+              >
+                💾 {exportLoading ? 'Exporting...' : 'Export Document'}
+              </button>
+              <button
+                onClick={() => setCurrentStep('description')}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                🏠 Start New SRS
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Review Step
+  if (currentStep === 'review') {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">SRS Document Review</h1>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentStep('progress')}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                View Progress
+              </button>
+              <button
+                onClick={() => setCurrentStep('questions')}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Back to Questions
+              </button>
+              <button
+                onClick={handleExportSRS}
+                disabled={!finalSrsContent || exportLoading}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+              >
+                {exportLoading ? 'Exporting...' : 'Export to DOCX'}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold">Complete SRS Document</h2>
+              <p className="text-gray-600">
+                Review the complete Software Requirements Specification document generated from your inputs.
+              </p>
+            </div>
+
+            {finalSrsContent ? (
+              <div className="border border-gray-300 rounded-lg p-6 max-h-[600px] overflow-y-auto">
+                <pre className="whitespace-pre-wrap font-sans">{finalSrsContent}</pre>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p>Generating final SRS document...</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-between">
+              <div className="text-sm text-gray-600">
+                Progress: {getProgressPercentage()}% Complete ({savedSections.length} sections saved)
+              </div>
+              {getProgressPercentage() < 100 && (
+                <button
+                  onClick={() => setCurrentStep('questions')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded"
+                >
+                  Continue Adding Sections
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

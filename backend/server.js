@@ -14,6 +14,21 @@ const app = express();
 const port = process.env.PORT || 4000;
 const ajv = new Ajv();
 
+// Helper: extract likely JSON from LLM responses (handles ```json fences and extra text)
+function extractJson(rawText = '') {
+  if (!rawText) return rawText;
+  const fenced = rawText.match(/```json([\s\S]*?)```/i);
+  if (fenced && fenced[1]) {
+    return fenced[1].trim();
+  }
+  const firstBrace = rawText.indexOf('{');
+  const lastBrace = rawText.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return rawText.slice(firstBrace, lastBrace + 1);
+  }
+  return rawText.trim();
+}
+
 // Enable CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -97,14 +112,14 @@ async function callLLM(promptText) {
 // Validation helper
 async function validateLLMResponse(responseText, schema, retryPrompt) {
   try {
-    const parsed = JSON.parse(responseText);
+    const parsed = JSON.parse(extractJson(responseText));
     if (ajv.validate(schema, parsed)) {
       return parsed;
     }
 
     // Retry once with explicit schema instruction
     const retryResponse = await callLLM(retryPrompt);
-    const parsed2 = JSON.parse(retryResponse);
+    const parsed2 = JSON.parse(extractJson(retryResponse));
     
     if (ajv.validate(schema, parsed2)) {
       return parsed2;
@@ -126,7 +141,8 @@ async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedRe
 }
 
 // Endpoints
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 app.post('/api/sdlc/recommend', async (req, res) => {
   try {
@@ -146,7 +162,7 @@ app.post('/api/sdlc/recommend', async (req, res) => {
 
     let parsedResponse;
     try {
-      parsedResponse = JSON.parse(rawResponse);
+      parsedResponse = JSON.parse(extractJson(rawResponse));
     } catch (parseError) {
       console.error('Failed to parse LLM response:', parseError);
       throw new Error('Invalid JSON response from LLM');
@@ -197,7 +213,7 @@ app.post('/api/plan/generate', async (req, res) => {
   try {
     const { project_text } = req.body;
     const promptTemplate = await loadPrompt('plan_prompt.txt');
-    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', project_text);
+    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', project_text || '');
 
     const rawResponse = await callLLM(prompt);
     const validated = await validateLLMResponse(

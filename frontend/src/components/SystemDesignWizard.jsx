@@ -1,18 +1,23 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useProjectContext } from './ProjectContext';
 
 export default function SystemDesignWizard() {
+  const navigate = useNavigate();
+  const { projectId } = useParams();
+  const { documents, projectName } = useProjectContext();
   const [form, setForm] = useState({
     cloudPreference: '',
     legacyTech: '',
     teamSkills: '',
     priorities: '',
     isGreenfield: false,
-    srsText: '',
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [designMarkdown, setDesignMarkdown] = useState('');
+  const contextDocs = documents.filter((d) => d.useAsContext);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -26,8 +31,9 @@ export default function SystemDesignWizard() {
     e.preventDefault();
     setError('');
 
-    if (!form.srsText.trim()) {
-      setError('Please paste or provide the key SRS content before generating the design.');
+    const combinedSrs = contextDocs.map((d) => d.content).filter(Boolean).join('\n\n');
+    if (!combinedSrs) {
+      setError('Mark at least one document as "Use in context" in the sidebar to proceed.');
       return;
     }
 
@@ -37,7 +43,7 @@ export default function SystemDesignWizard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          srs_text: form.srsText,
+          srs_text: combinedSrs,
           context: {
             cloudPreference: form.cloudPreference,
             legacyTech: form.legacyTech,
@@ -111,6 +117,11 @@ export default function SystemDesignWizard() {
         {/* Header */}
         <header className="mb-8">
           <div className="mb-2">
+            <button className="btn btn-secondary" onClick={() => navigate(`/projects/${projectId}/design`)}>
+              ← Back to Design Studio
+            </button>
+          </div>
+          <div className="mb-2">
             <span className="badge badge-blue">System Design &amp; Tech Stack Suggestion</span>
           </div>
           <h1
@@ -120,10 +131,19 @@ export default function SystemDesignWizard() {
             Consultation Wizard
           </h1>
           <p className="text-gray-600" style={{ maxWidth: '640px' }}>
-            Answer a few high‑level questions about your environment and priorities, then paste the
-            key parts of your SRS. The AI Software Engineer will propose an architecture strategy,
-            tech stack, and a visual Mermaid diagram.
+            Answer a few high‑level questions about your environment and priorities. Any documents you
+            marked as "Use in context" in the sidebar will automatically feed the AI (no need to paste SRS).
           </p>
+          {contextDocs.length > 0 && (
+            <p className="text-sm text-green-700 mt-2">
+              Using {contextDocs.length} document(s) marked "Use in context" from the project sidebar.
+            </p>
+          )}
+          {contextDocs.length === 0 && (
+            <p className="text-sm text-gray-600 mt-2">
+              No context selected yet. Open the sidebar and toggle "Use in context" on an SRS or other doc.
+            </p>
+          )}
         </header>
 
         <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '1.5rem' }}>
@@ -180,18 +200,6 @@ export default function SystemDesignWizard() {
                   name="priorities"
                   placeholder="e.g., Speed‑to‑market over scalability, low cost, strict compliance"
                   value={form.priorities}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="text-sm font-medium mb-1">SRS Content (from previous phase)</label>
-                <textarea
-                  className="textarea"
-                  name="srsText"
-                  placeholder="Paste the most important sections of your SRS here (overview, key requirements, NFRs)..."
-                  rows={8}
-                  value={form.srsText}
                   onChange={handleChange}
                 />
               </div>

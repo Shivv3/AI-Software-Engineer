@@ -1,7 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useProjectContext } from './ProjectContext';
 
 export default function DesignPage() {
   const navigate = useNavigate();
+  const { projectId } = useParams();
+  const { projectName } = useProjectContext();
 
   return (
     <div
@@ -15,6 +18,11 @@ export default function DesignPage() {
         {/* Header / Hero */}
         <header className="mb-8">
           <div className="mb-2">
+            <button className="btn btn-secondary" onClick={() => navigate(`/projects/${projectId || ''}`)}>
+              ← Back to workspace
+            </button>
+          </div>
+          <div className="mb-2">
             <span className="badge badge-green">Phase 2 · System Design</span>
           </div>
           <h1
@@ -24,7 +32,7 @@ export default function DesignPage() {
             Design Studio – from SRS to architecture blueprints.
           </h1>
           <p className="text-gray-600" style={{ maxWidth: '640px' }}>
-            You have entered the System Design phase. Using your SRS as the source of truth, this
+            You have entered the System Design phase{projectName ? ` for ${projectName}` : ''}. Using your SRS as the source of truth, this
             workspace will help you explore architecture options, select a tech stack, and derive
             database schemas. The initial features below will be expanded soon.
           </p>
@@ -63,7 +71,7 @@ export default function DesignPage() {
               <button
                 className="btn btn-secondary"
                 style={{ width: '100%' }}
-                onClick={() => navigate('/design/system')}
+                onClick={() => navigate(`/projects/${projectId}/design/system`)}
               >
                 Open Consultation Wizard
               </button>

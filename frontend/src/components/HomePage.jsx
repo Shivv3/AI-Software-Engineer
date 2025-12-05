@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import ResultsPanel from './ResultsPanel';
+import { useProjectContext } from './ProjectContext';
 
 export default function HomePage() {
+  const navigate = useNavigate();
+  const { projectId } = useParams();
+  const { addDocument, projectName, documents } = useProjectContext();
   const [projectData, setProjectData] = useState({
     title: '',
     description: '',
@@ -23,6 +28,73 @@ export default function HomePage() {
     implicitRequirements: null
   });
 
+  const [saveMessage, setSaveMessage] = useState('');
+  const downloadText = (filename, content) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const makeSDLCText = () => {
+    if (!results.sdlcRecommendation) return '';
+    const { model, why, when_not_to_use, confidence } = results.sdlcRecommendation;
+    return `SDLC Recommendation\nModel: ${model}\nWhy: ${why}\nWhen not to use: ${when_not_to_use || 'n/a'}\nConfidence: ${(
+      confidence * 100
+    ).toFixed(1)}%`;
+  };
+
+  const makePlanText = () => {
+    if (!results.projectPlan) return '';
+    return results.projectPlan
+      .map(
+        (m, idx) =>
+          `Milestone ${idx + 1}: ${m.title}\nDuration: ${m.duration_weeks} weeks\nDeliverables: ${m.deliverables.join(
+            ', ',
+          )}${m.roles_required ? `\nRoles: ${m.roles_required.join(', ')}` : ''}`,
+      )
+      .join('\n\n');
+  };
+
+  const makeImplicitText = () => {
+    if (!results.implicitRequirements) return '';
+    return results.implicitRequirements
+      .map((r, idx) => `${idx + 1}. [${r.type}/${r.priority}] ${r.title} - ${r.description}\nRationale: ${r.rationale}`)
+      .join('\n\n');
+  };
+
+  const contextDocs = documents.filter((d) => d.useAsContext && d.content);
+  const getContextText = () =>
+    contextDocs
+      .map((d) => `---\n[${d.type || 'Doc'}] ${d.name}\n${d.content}`)
+      .join('\n\n');
+
+  const saveDoc = async ({ name, type, content }) => {
+    if (!projectId) {
+      alert('Open or create a project to save documents.');
+      return;
+    }
+    if (!content.trim()) {
+      alert('Nothing to save yet.');
+      return;
+    }
+    await addDocument({
+      name,
+      type,
+      mime: 'text/plain',
+      content,
+      source: 'generated',
+      useAsContext: true,
+    });
+    setSaveMessage('Saved to project sidebar.');
+    setTimeout(() => setSaveMessage(''), 2000);
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setProjectData(prev => ({
@@ -39,7 +111,7 @@ export default function HomePage() {
     try {
       setLoading(prev => ({ ...prev, sdlc: true }));
       const response = await axios.post('/api/sdlc/recommend', {
-        project_text: projectData.description,
+        project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         constraints: {
           team_size: parseInt(projectData.teamSize) || 1,
           timeline: projectData.timeline || '3 months',
@@ -72,7 +144,7 @@ export default function HomePage() {
     try {
       setLoading(prev => ({ ...prev, plan: true }));
       const response = await axios.post('/api/plan/generate', {
-        project_text: projectData.description,
+        project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         title: projectData.title || 'Untitled Project',
         team_size: parseInt(projectData.teamSize) || 1,
         timeline: projectData.timeline || '3 months',
@@ -104,7 +176,7 @@ export default function HomePage() {
     try {
       setLoading(prev => ({ ...prev, requirements: true }));
       const response = await axios.post('/api/plan/generate', {
-        project_text: projectData.description,
+        project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         title: projectData.title || 'Untitled Project',
         team_size: parseInt(projectData.teamSize) || 1,
         timeline: projectData.timeline || '3 months',
@@ -128,9 +200,77 @@ export default function HomePage() {
     }
   };
 
+  const buildSrsDraft = () => {
+    const parts = [];
+    if (projectData.title) parts.push(`Project: ${projectData.title}`);
+    if (projectData.description) parts.push(`Description:\n${projectData.description}`);
+    if (results.sdlcRecommendation) {
+      parts.push(
+        `SDLC Recommendation: ${results.sdlcRecommendation.model}\nWhy: ${results.sdlcRecommendation.why}\nConfidence: ${(
+          results.sdlcRecommendation.confidence * 100
+        ).toFixed(1)}%`,
+      );
+    }
+    if (results.projectPlan) {
+      const planText = results.projectPlan
+        .map(
+          (m, idx) =>
+            `Milestone ${idx + 1}: ${m.title}\nDuration: ${m.duration_weeks} weeks\nDeliverables: ${m.deliverables.join(
+              ', ',
+            )}`,
+        )
+        .join('\n\n');
+      parts.push(`Project Plan:\n${planText}`);
+    }
+    if (results.implicitRequirements) {
+      const reqText = results.implicitRequirements
+        .map((r, idx) => `${idx + 1}. [${r.type}/${r.priority}] ${r.title} - ${r.description}`)
+        .join('\n');
+      parts.push(`Implicit Requirements:\n${reqText}`);
+    }
+    return parts.join('\n\n');
+  };
+
+  const handleSaveToProject = async () => {
+    const content = buildSrsDraft();
+    if (!projectId) {
+      alert('Open or create a project to save documents.');
+      return;
+    }
+    if (!content.trim()) {
+      alert('Generate content first (plan or requirements) before saving.');
+      return;
+    }
+    await addDocument({
+      name: projectData.title ? `${projectData.title} - SRS Draft` : 'SRS Draft',
+      type: 'SRS',
+      mime: 'text/plain',
+      content,
+      source: 'generated',
+      useAsContext: true,
+    });
+    setSaveMessage('Saved to project sidebar.');
+    setTimeout(() => setSaveMessage(''), 2500);
+  };
+
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Project Analysis Tool</h1>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h1 className="text-2xl font-bold">Project Analysis Tool</h1>
+        {projectId && (
+          <div className="text-sm text-gray-600">
+            Project: <strong>{projectName || projectData.title || 'Untitled project'}</strong>
+          </div>
+        )}
+      </div>
+      <div className="mb-2">
+        <button
+          onClick={() => navigate(`/projects/${projectId || ''}`)}
+          className="px-3 py-2 bg-gray-100 rounded text-sm"
+        >
+          ← Back to Workspace
+        </button>
+      </div>
       
       <div className="mb-6">
         <input
@@ -203,7 +343,7 @@ export default function HomePage() {
           </button>
 
           <button
-            onClick={() => window.location.href = '/srs-editor'}
+            onClick={() => navigate(projectId ? `/projects/${projectId}/srs-editor` : '/srs-editor')}
             className="px-4 py-2 bg-purple-500 text-white rounded"
           >
             SRS Editor
@@ -216,8 +356,34 @@ export default function HomePage() {
           sdlcRecommendation={results.sdlcRecommendation}
           projectPlan={results.projectPlan}
           implicitRequirements={results.implicitRequirements}
+          onSaveSDLC={() =>
+            saveDoc({
+              name: `${projectData.title || projectName || 'Project'} - SDLC Recommendation`,
+              type: 'SDLC',
+              content: makeSDLCText(),
+            })
+          }
+          onDownloadSDLC={() => downloadText('sdlc-recommendation.txt', makeSDLCText())}
+          onSavePlan={() =>
+            saveDoc({
+              name: `${projectData.title || projectName || 'Project'} - Project Plan`,
+              type: 'Plan',
+              content: makePlanText(),
+            })
+          }
+          onDownloadPlan={() => downloadText('project-plan.txt', makePlanText())}
+          onSaveImplicit={() =>
+            saveDoc({
+              name: `${projectData.title || projectName || 'Project'} - Implicit Requirements`,
+              type: 'Requirements',
+              content: makeImplicitText(),
+            })
+          }
+          onDownloadImplicit={() => downloadText('implicit-requirements.txt', makeImplicitText())}
         />
       )}
+
+      {saveMessage && <p className="text-sm text-green-700 mt-2">{saveMessage}</p>}
     </div>
   );
 }

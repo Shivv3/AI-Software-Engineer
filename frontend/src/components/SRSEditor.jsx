@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import axios from 'axios';
+import { useProjectContext } from './ProjectContext';
 
 const SECTION_MAPPING = {
   '1_introduction': 'Introduction',
@@ -10,6 +12,9 @@ const SECTION_MAPPING = {
 };
 
 export default function SRSEditor() {
+  const navigate = useNavigate();
+  const { projectId: routeProjectId } = useParams();
+  const { addDocument, projectName } = useProjectContext();
   const [currentStep, setCurrentStep] = useState('description'); // 'description', 'questions', 'review', 'progress'
   const [projectDescription, setProjectDescription] = useState('');
   const [generateLoading, setGenerateLoading] = useState(false);
@@ -30,6 +35,28 @@ export default function SRSEditor() {
   // Progress tracking state
   const [srsStatus, setSrsStatus] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  const handleSaveFinalToSidebar = async () => {
+    if (!routeProjectId) {
+      alert('Open or create a project to save documents.');
+      return;
+    }
+    if (!finalSrsContent.trim()) {
+      alert('Generate SRS content first.');
+      return;
+    }
+    await addDocument({
+      name: `${projectName || 'Project'} - SRS`,
+      type: 'SRS',
+      mime: 'text/plain',
+      content: finalSrsContent,
+      source: 'generated',
+      useAsContext: true,
+    });
+    setSaveMessage('Saved SRS to sidebar.');
+    setTimeout(() => setSaveMessage(''), 2000);
+  };
 
   const handleGenerateSRS = async () => {
     if (!projectDescription.trim()) {
@@ -271,10 +298,10 @@ export default function SRSEditor() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">SRS Wizard</h1>
             <button
-              onClick={() => window.location.href = '/'}
+              onClick={() => navigate(`/projects/${routeProjectId}/requirements`)}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
-              Back to Home
+              Back to Requirements
             </button>
           </div>
 
@@ -557,6 +584,13 @@ export default function SRSEditor() {
               >
                 {exportLoading ? 'Exporting...' : 'Export Current SRS'}
               </button>
+              <button
+                onClick={handleSaveFinalToSidebar}
+                disabled={!finalSrsContent}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+              >
+                Save to sidebar
+              </button>
             </div>
           </div>
 
@@ -714,6 +748,13 @@ export default function SRSEditor() {
                 💾 {exportLoading ? 'Exporting...' : 'Export Document'}
               </button>
               <button
+                onClick={handleSaveFinalToSidebar}
+                disabled={!finalSrsContent}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+              >
+                📁 Save to sidebar
+              </button>
+              <button
                 onClick={() => setCurrentStep('description')}
                 className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
               >
@@ -752,6 +793,13 @@ export default function SRSEditor() {
                 className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
               >
                 {exportLoading ? 'Exporting...' : 'Export to DOCX'}
+              </button>
+              <button
+                onClick={handleSaveFinalToSidebar}
+                disabled={!finalSrsContent}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+              >
+                Save to sidebar
               </button>
             </div>
           </div>

@@ -1,6 +1,16 @@
 import { useState } from 'react';
 
-export default function ResultsPanel({ sdlcRecommendation, projectPlan, implicitRequirements }) {
+export default function ResultsPanel({
+  sdlcRecommendation,
+  projectPlan,
+  implicitRequirements,
+  onSaveSDLC,
+  onDownloadSDLC,
+  onSavePlan,
+  onDownloadPlan,
+  onSaveImplicit,
+  onDownloadImplicit,
+}) {
   const [addedRequirements, setAddedRequirements] = useState(new Set());
 
   const handleAddToSRS = (requirement) => {
@@ -23,6 +33,14 @@ export default function ResultsPanel({ sdlcRecommendation, projectPlan, implicit
               <span className="font-semibold">Confidence:</span>{' '}
               {(sdlcRecommendation.confidence * 100).toFixed(1)}%
             </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button className="px-3 py-2 bg-blue-500 text-white rounded text-sm" onClick={onSaveSDLC}>
+              Save to sidebar
+            </button>
+            <button className="px-3 py-2 bg-gray-200 text-sm rounded" onClick={onDownloadSDLC}>
+              Download
+            </button>
           </div>
         </div>
       )}
@@ -59,6 +77,14 @@ export default function ResultsPanel({ sdlcRecommendation, projectPlan, implicit
                 </div>
               ))}
             </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button className="px-3 py-2 bg-blue-500 text-white rounded text-sm" onClick={onSavePlan}>
+              Save to sidebar
+            </button>
+            <button className="px-3 py-2 bg-gray-200 text-sm rounded" onClick={onDownloadPlan}>
+              Download
+            </button>
           </div>
         </div>
       )}
@@ -103,6 +129,14 @@ export default function ResultsPanel({ sdlcRecommendation, projectPlan, implicit
                 </p>
               </div>
             ))}
+          </div>
+          <div className="flex gap-2 flex-wrap mt-3">
+            <button className="px-3 py-2 bg-blue-500 text-white rounded text-sm" onClick={onSaveImplicit}>
+              Save to sidebar
+            </button>
+            <button className="px-3 py-2 bg-gray-200 text-sm rounded" onClick={onDownloadImplicit}>
+              Download
+            </button>
           </div>
         </div>
       )}

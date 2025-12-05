@@ -10,6 +10,30 @@ const { Document, Packer, Paragraph } = require('docx');
 const Database = require('better-sqlite3');
 const llm = require('./services/llm');
 
+// Document parsing libraries - using dynamic imports for ESM modules
+let pdfParseModule;
+let mammoth;
+
+try {
+  mammoth = require('mammoth');
+  console.log('mammoth loaded successfully');
+} catch (err) {
+  console.warn('mammoth not available:', err.message);
+}
+
+// pdf-parse is ESM, will be loaded dynamically
+async function loadPdfParse() {
+  if (!pdfParseModule) {
+    try {
+      pdfParseModule = await import('pdf-parse');
+      console.log('pdf-parse loaded successfully');
+    } catch (err) {
+      console.warn('pdf-parse not available:', err.message);
+    }
+  }
+  return pdfParseModule;
+}
+
 const app = express();
 const port = process.env.PORT || 4000;
 const ajv = new Ajv();
@@ -238,6 +262,19 @@ app.post('/api/design/system', async (req, res) => {
       return res.status(400).json({ error: 'srs_text is required and must be a string' });
     }
 
+    // Check if srs_text is still a data URI (should have been extracted on frontend)
+    if (srs_text.startsWith('data:')) {
+      console.warn('Received data URI in srs_text - this should have been extracted on frontend');
+      return res.status(400).json({ 
+        error: 'Document content must be extracted as text before sending. Please ensure PDFs are processed correctly.' 
+      });
+    }
+
+    // Warn if content is very large (rough estimate: 100k chars ≈ 25k tokens)
+    if (srs_text.length > 100000) {
+      console.warn(`Large SRS content detected: ${srs_text.length} characters`);
+    }
+
     const promptTemplate = await loadPrompt('system_design_prompt.txt');
     const contextJson = JSON.stringify(context || {}, null, 2);
 
@@ -245,20 +282,23 @@ app.post('/api/design/system', async (req, res) => {
       .replace('<<<SRS_CONTENT>>>', srs_text)
       .replace('<<<CONTEXT_JSON>>>', contextJson);
 
+    console.log(`Calling LLM for system design with SRS length: ${srs_text.length} chars`);
     const rawResponse = await callLLM(prompt);
 
     await logInteraction(
       req.params.id || 'design_anonymous',
       '/api/design/system',
-      prompt,
-      rawResponse,
-      { design_markdown: rawResponse }
+      prompt.substring(0, 1000) + '...', // Truncate for logging
+      rawResponse.substring(0, 1000) + '...', // Truncate for logging
+      { design_markdown: rawResponse.substring(0, 100) + '...' }
     );
 
     res.json({ design_markdown: rawResponse });
   } catch (error) {
     console.error('System design generation error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate system design' });
+    // Preserve the original error message from LLM service
+    const errorMessage = error.message || 'Failed to generate system design';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
@@ -798,6 +838,174 @@ app.post('/api/project/:id/export', async (req, res) => {
   } catch (error) {
     console.error('Export error:', error);
     res.status(500).json({ error: 'Failed to generate document' });
+  }
+});
+
+// Extract text from PDF, DOCX, or other documents (base64 data URI)
+app.post('/api/documents/extract-text', async (req, res) => {
+  try {
+    const { content, mime } = req.body;
+
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'content is required and must be a string' });
+    }
+
+    // Helper to extract base64 data from data URI
+    const extractBase64 = (dataUri) => {
+      const parts = dataUri.split(',');
+      if (parts.length < 2) {
+        throw new Error('Invalid data URI format');
+      }
+      return parts[1];
+    };
+
+    // Check if it's a PDF data URI
+    if (content.startsWith('data:application/pdf;base64,')) {
+      try {
+        // Load pdf-parse dynamically (it's an ESM module)
+        const pdfParseModule = await loadPdfParse();
+        if (!pdfParseModule) {
+          return res.status(500).json({ 
+            error: 'PDF parsing is not available. Please ensure pdf-parse is installed.' 
+          });
+        }
+
+        const base64Data = extractBase64(content);
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        if (buffer.length === 0) {
+          return res.status(400).json({ error: 'Empty PDF file' });
+        }
+        
+        // pdf-parse exports as default or named export
+        const pdfParse = pdfParseModule.default || pdfParseModule;
+        const data = await pdfParse(buffer);
+        
+        const extractedText = data.text || '';
+        
+        if (!extractedText.trim()) {
+          console.warn('PDF extracted but contains no text (might be image-based PDF)');
+        }
+        
+        res.json({ 
+          text: extractedText, 
+          pageCount: data.numpages || 0,
+          metadata: {
+            info: data.info || {},
+            metadata: data.metadata || {}
+          }
+        });
+      } catch (pdfError) {
+        console.error('PDF parsing error:', pdfError);
+        throw new Error(`Failed to parse PDF: ${pdfError.message}`);
+      }
+    } 
+    // Check if it's a DOCX data URI
+    else if (content.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,') ||
+             content.startsWith('data:application/msword;base64,') ||
+             (mime && (mime.includes('wordprocessingml') || mime.includes('msword'))) ||
+             content.startsWith('data:application/octet-stream;base64,') && mime && mime.includes('word')) {
+      
+      if (!mammoth) {
+        return res.status(500).json({ 
+          error: 'DOCX parsing is not available. Please ensure mammoth is installed.' 
+        });
+      }
+
+      try {
+        const base64Data = extractBase64(content);
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        if (buffer.length === 0) {
+          return res.status(400).json({ error: 'Empty DOCX file' });
+        }
+        
+        // mammoth.extractRawText() for plain text, or .convertToHtml() for formatted
+        const result = await mammoth.extractRawText({ buffer });
+        const extractedText = result.value || '';
+        
+        if (!extractedText.trim()) {
+          console.warn('DOCX extracted but contains no text');
+        }
+        
+        // Get messages/warnings if any
+        const messages = result.messages || [];
+        if (messages.length > 0) {
+          console.warn('DOCX parsing messages:', messages);
+        }
+        
+        res.json({ 
+          text: extractedText, 
+          pageCount: 1,
+          messages: messages.map(m => m.message)
+        });
+      } catch (docxError) {
+        console.error('DOCX parsing error:', docxError);
+        throw new Error(`Failed to parse DOCX: ${docxError.message}`);
+      }
+    } 
+    // Handle text data URIs
+    else if (content.startsWith('data:text/')) {
+      try {
+        const base64Data = extractBase64(content);
+        const text = Buffer.from(base64Data, 'base64').toString('utf-8');
+        res.json({ text, pageCount: 1 });
+      } catch (textError) {
+        console.error('Text extraction error:', textError);
+        throw new Error(`Failed to extract text from data URI: ${textError.message}`);
+      }
+    } 
+    // Handle other data URIs - try to detect by mime type
+    else if (content.startsWith('data:')) {
+      // Check mime type if provided
+      if (mime) {
+        if (mime.includes('pdf')) {
+          // Try PDF parsing
+          try {
+            const pdfParseModule = await loadPdfParse();
+            if (pdfParseModule) {
+              const base64Data = extractBase64(content);
+              const buffer = Buffer.from(base64Data, 'base64');
+              const pdfParse = pdfParseModule.default || pdfParseModule;
+              const data = await pdfParse(buffer);
+              return res.json({ 
+                text: data.text || '', 
+                pageCount: data.numpages || 0 
+              });
+            }
+          } catch (err) {
+            console.warn('Failed to parse as PDF:', err.message);
+          }
+        } else if (mime.includes('word') || mime.includes('document')) {
+          // Try DOCX parsing
+          if (mammoth) {
+            try {
+              const base64Data = extractBase64(content);
+              const buffer = Buffer.from(base64Data, 'base64');
+              const result = await mammoth.extractRawText({ buffer });
+              return res.json({ 
+                text: result.value || '', 
+                pageCount: 1 
+              });
+            } catch (err) {
+              console.warn('Failed to parse as DOCX:', err.message);
+            }
+          }
+        }
+      }
+      
+      return res.status(400).json({ 
+        error: 'Unsupported file type. Supported formats: PDF, DOCX, and text files. ' +
+               'Received: ' + (content.substring(0, 100) + '...') 
+      });
+    } 
+    // Already plain text
+    else {
+      res.json({ text: content, pageCount: 1 });
+    }
+  } catch (error) {
+    console.error('Text extraction error:', error);
+    res.status(500).json({ error: error.message || 'Failed to extract text from document' });
   }
 });
 

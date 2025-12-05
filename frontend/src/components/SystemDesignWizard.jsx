@@ -17,6 +17,7 @@ export default function SystemDesignWizard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [designMarkdown, setDesignMarkdown] = useState('');
+  const [processingStatus, setProcessingStatus] = useState('');
   const contextDocs = documents.filter((d) => d.useAsContext);
 
   const handleChange = (e) => {
@@ -27,18 +28,112 @@ export default function SystemDesignWizard() {
     }));
   };
 
+  // Helper function to check if content is a PDF data URI
+  const isPdfDataUri = (content) => {
+    return typeof content === 'string' && content.startsWith('data:application/pdf;base64,');
+  };
+
+  // Helper function to check if content is a DOCX data URI
+  const isDocxDataUri = (content, mime) => {
+    if (typeof content !== 'string') return false;
+    return (
+      content.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,') ||
+      content.startsWith('data:application/msword;base64,') ||
+      (mime && (mime.includes('wordprocessingml') || mime.includes('msword') || mime.includes('word')))
+    );
+  };
+
+  // Helper function to check if content is any data URI
+  const isDataUri = (content) => {
+    return typeof content === 'string' && content.startsWith('data:');
+  };
+
+  // Extract text from a document (handles PDFs, DOCX, text data URIs, and plain text)
+  const extractTextFromDocument = async (doc) => {
+    const { content, mime, name } = doc;
+
+    if (!content) {
+      return null;
+    }
+
+    // If it's already plain text (not a data URI), return as-is
+    if (!isDataUri(content)) {
+      return content;
+    }
+
+    // Determine file type for better status messages
+    let fileType = 'document';
+    if (isPdfDataUri(content)) {
+      fileType = 'PDF';
+    } else if (isDocxDataUri(content, mime)) {
+      fileType = 'DOCX';
+    } else if (content.startsWith('data:text/')) {
+      fileType = 'text file';
+    }
+
+    // If it's a PDF, DOCX, or other data URI, extract text via backend
+    if (isPdfDataUri(content) || isDocxDataUri(content, mime) || isDataUri(content)) {
+      try {
+        setProcessingStatus(`Extracting text from ${fileType}: ${name || 'document'}...`);
+        const response = await fetch('/api/documents/extract-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, mime }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to extract text from ${name || 'document'}`);
+        }
+
+        const data = await response.json();
+        const extractedText = data.text || '';
+        
+        if (!extractedText.trim()) {
+          console.warn(`Warning: ${name || 'document'} extracted but contains no text`);
+        }
+        
+        return extractedText;
+      } catch (err) {
+        console.error(`Error extracting text from ${name}:`, err);
+        throw new Error(`Failed to extract text from ${name || 'document'}: ${err.message}`);
+      }
+    }
+
+    return content;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setProcessingStatus('');
 
-    const combinedSrs = contextDocs.map((d) => d.content).filter(Boolean).join('\n\n');
-    if (!combinedSrs) {
+    if (contextDocs.length === 0) {
       setError('Mark at least one document as "Use in context" in the sidebar to proceed.');
       return;
     }
 
     setLoading(true);
     try {
+      // Extract text from all context documents
+      setProcessingStatus('Processing documents...');
+      const textPromises = contextDocs.map((doc) => extractTextFromDocument(doc));
+      const extractedTexts = await Promise.all(textPromises);
+
+      // Filter out null/empty results and combine
+      const combinedSrs = extractedTexts
+        .filter((text) => text && text.trim())
+        .map((text, idx) => {
+          const doc = contextDocs[idx];
+          return doc.name ? `---\n[${doc.name}]\n${text}` : text;
+        })
+        .join('\n\n');
+
+      if (!combinedSrs || !combinedSrs.trim()) {
+        throw new Error('No text content could be extracted from the selected documents. Please ensure your documents contain readable text.');
+      }
+
+      setProcessingStatus('Generating system design...');
       const response = await fetch('/api/design/system', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,8 +156,10 @@ export default function SystemDesignWizard() {
 
       const data = await response.json();
       setDesignMarkdown(data.design_markdown || '');
+      setProcessingStatus('');
     } catch (err) {
       setError(err.message || 'Failed to generate system design');
+      setProcessingStatus('');
     } finally {
       setLoading(false);
     }
@@ -218,6 +315,12 @@ export default function SystemDesignWizard() {
                 </label>
               </div>
 
+              {processingStatus && (
+                <p className="text-sm" style={{ color: '#059669', marginBottom: '0.75rem' }}>
+                  {processingStatus}
+                </p>
+              )}
+
               {error && (
                 <p className="text-sm" style={{ color: '#b91c1c', marginBottom: '0.75rem' }}>
                   {error}
@@ -230,7 +333,7 @@ export default function SystemDesignWizard() {
                 disabled={loading}
                 style={{ width: '100%' }}
               >
-                {loading ? 'Generating System Design...' : 'Generate System Design'}
+                {loading ? (processingStatus || 'Generating System Design...') : 'Generate System Design'}
               </button>
             </form>
           </section>

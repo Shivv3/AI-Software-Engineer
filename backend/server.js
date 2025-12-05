@@ -213,6 +213,39 @@ app.post('/api/plan/generate', async (req, res) => {
   }
 });
 
+// Generate system design & tech stack suggestions based on SRS + context
+app.post('/api/design/system', async (req, res) => {
+  try {
+    const { srs_text, context } = req.body;
+
+    if (!srs_text || typeof srs_text !== 'string') {
+      return res.status(400).json({ error: 'srs_text is required and must be a string' });
+    }
+
+    const promptTemplate = await loadPrompt('system_design_prompt.txt');
+    const contextJson = JSON.stringify(context || {}, null, 2);
+
+    const prompt = promptTemplate
+      .replace('<<<SRS_CONTENT>>>', srs_text)
+      .replace('<<<CONTEXT_JSON>>>', contextJson);
+
+    const rawResponse = await callLLM(prompt);
+
+    await logInteraction(
+      req.params.id || 'design_anonymous',
+      '/api/design/system',
+      prompt,
+      rawResponse,
+      { design_markdown: rawResponse }
+    );
+
+    res.json({ design_markdown: rawResponse });
+  } catch (error) {
+    console.error('System design generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate system design' });
+  }
+});
+
 // Helper to determine if text is code block
 function isCodeBlock(text) {
   // Check for common code indicators
@@ -724,6 +757,7 @@ app.get('/api/srs/status/:project_id', async (req, res) => {
 });
 
 const { createProjectDocument } = require('./services/docx-generator');
+const { createDesignDocument } = require('./services/design-docx');
 
 app.post('/api/project/:id/export', async (req, res) => {
   try {
@@ -748,6 +782,31 @@ app.post('/api/project/:id/export', async (req, res) => {
   } catch (error) {
     console.error('Export error:', error);
     res.status(500).json({ error: 'Failed to generate document' });
+  }
+});
+
+// Export system design markdown as a DOCX document
+app.post('/api/design/export', async (req, res) => {
+  try {
+    const { design_markdown } = req.body;
+
+    if (!design_markdown || typeof design_markdown !== 'string') {
+      return res.status(400).json({ error: 'design_markdown is required and must be a string' });
+    }
+
+    const doc = createDesignDocument(design_markdown);
+    const buffer = await Packer.toBuffer(doc);
+    const filename = `system_design_${Date.now()}.docx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Design export error:', error);
+    res.status(500).json({ error: 'Failed to export system design document' });
   }
 });
 

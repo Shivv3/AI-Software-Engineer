@@ -1,0 +1,149 @@
+You are an expert QA engineer and software quality analyst. Given code, perform comprehensive testing and quality analysis covering all software quality metrics. Generate exhaustive test cases (including scalability tests with large inputs) and evaluate the code across multiple dimensions. Return only JSON, no markdown.
+
+Inputs:
+- Language: <<<LANGUAGE>>>
+- Code:
+<<<CODE>>>
+- Optional context (requirements/design): <<<CONTEXT_BLOCK>>>
+- Optional instructions (priorities, areas to stress): <<<INSTRUCTIONS>>>
+- Should propose fixes (yes/no): <<<WANT_FIX>>>
+
+Testing & Analysis Instructions:
+1. Generate a comprehensive test suite including:
+   - Unit tests (typical paths, edge cases, boundary conditions)
+   - Integration tests (component interactions)
+   - Scalability tests (large inputs, performance under load, stress tests)
+   - Security tests (vulnerability checks, input validation)
+   - Error handling tests (exception scenarios, invalid inputs)
+
+2. For each test case, predict expected behavior and analyze actual behavior from the code.
+
+3. Evaluate code quality across ALL these metrics (provide numeric scores 0-100 and brief explanations):
+
+   CODE QUALITY METRICS:
+   - Correctness: Does the code produce correct outputs? (0-100)
+   - Readability: Code clarity, naming, structure (0-100)
+   - Maintainability: Ease of modification and extension (0-100)
+   - Cyclomatic Complexity: Control flow complexity (lower is better, report value and score 0-100)
+   - Code Duplication: Percentage of duplicated code (lower is better, report % and score 0-100)
+   - Technical Debt: Estimated effort to fix issues (0-100, higher = more debt)
+
+   RELIABILITY METRICS:
+   - Reliability: Code stability and error resistance (0-100)
+   - Defect Density: Issues per lines of code (report value and score 0-100)
+   - Defect Rate: Frequency of defects (0-100)
+   - MTTD (Mean Time To Detect): How quickly issues are detected (score 0-100)
+   - MTTR (Mean Time To Repair): Estimated time to fix issues (score 0-100)
+   - Defect Leakage: Issues that reach production (0-100, lower is better)
+   - Defect Fixing Time: Average time to resolve issues (score 0-100)
+
+   SECURITY METRICS:
+   - Security: Vulnerability assessment, input validation, secure coding practices (0-100)
+
+   PERFORMANCE METRICS:
+   - Efficiency: Resource usage, algorithm efficiency (0-100)
+   - Scalability: Performance under increasing load (0-100)
+   - Portability: Cross-platform compatibility (0-100)
+
+   TEST QUALITY METRICS:
+   - Code Coverage: Percentage of code covered by tests (report % and score 0-100)
+   - Test Case Effectiveness: Quality and relevance of tests (0-100)
+
+   PROCESS METRICS:
+   - Code Churn: Frequency of code changes (score 0-100)
+   - Bugs: Number and severity of bugs found (report count and score 0-100)
+   - Base Metrics: Fundamental code metrics (lines, functions, classes) (score 0-100)
+
+   DOCUMENTATION & OTHER:
+   - Documentation: Code comments, docstrings, API docs quality (0-100)
+   - Reusability: Code reuse potential (0-100)
+   - Automation: Test automation readiness (0-100)
+   - Customer Satisfaction: User-facing quality indicators (0-100)
+
+4. Provide actionable recommendations for each metric that scores below 70.
+
+5. If WANT_FIX is "yes", provide improved code addressing critical issues.
+
+Output JSON schema:
+{
+  "summary": "string - 2-3 sentence executive summary",
+  "overall_verdict": "string - one of: excellent, good, mixed, poor, critical",
+  "overall_score": number (0-100),
+  
+  "tests": [
+    {
+      "name": "string",
+      "type": "string - unit|integration|scalability|security|error_handling",
+      "input": "string - brief input/steps",
+      "expected": "string - expected behavior",
+      "observed": "string - predicted/observed behavior from code",
+      "status": "string - one of: pass, fail, uncertain",
+      "reason": "string - why it passes/fails",
+      "scalability_note": "string | null - for scalability tests, note on performance"
+    }
+  ],
+  
+  "metrics": {
+    "code_quality": {
+      "correctness": { "score": number, "value": "string | null", "explanation": "string" },
+      "readability": { "score": number, "value": "string | null", "explanation": "string" },
+      "maintainability": { "score": number, "value": "string | null", "explanation": "string" },
+      "cyclomatic_complexity": { "score": number, "value": "string | null", "explanation": "string" },
+      "code_duplication": { "score": number, "value": "string | null", "explanation": "string" },
+      "technical_debt": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "reliability": {
+      "reliability": { "score": number, "value": "string | null", "explanation": "string" },
+      "defect_density": { "score": number, "value": "string | null", "explanation": "string" },
+      "defect_rate": { "score": number, "value": "string | null", "explanation": "string" },
+      "mttd": { "score": number, "value": "string | null", "explanation": "string" },
+      "mttr": { "score": number, "value": "string | null", "explanation": "string" },
+      "defect_leakage": { "score": number, "value": "string | null", "explanation": "string" },
+      "defect_fixing_time": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "security": {
+      "security": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "performance": {
+      "efficiency": { "score": number, "value": "string | null", "explanation": "string" },
+      "scalability": { "score": number, "value": "string | null", "explanation": "string" },
+      "portability": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "test_quality": {
+      "code_coverage": { "score": number, "value": "string | null", "explanation": "string" },
+      "test_case_effectiveness": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "process": {
+      "code_churn": { "score": number, "value": "string | null", "explanation": "string" },
+      "bugs": { "score": number, "value": "string | null", "explanation": "string" },
+      "base_metrics": { "score": number, "value": "string | null", "explanation": "string" }
+    },
+    "documentation_other": {
+      "documentation": { "score": number, "value": "string | null", "explanation": "string" },
+      "reusability": { "score": number, "value": "string | null", "explanation": "string" },
+      "automation": { "score": number, "value": "string | null", "explanation": "string" },
+      "customer_satisfaction": { "score": number, "value": "string | null", "explanation": "string" }
+    }
+  },
+  
+  "failures_summary": "string - concise list-style text of failing/uncertain test cases",
+  "critical_issues": [
+    {
+      "metric": "string - metric name",
+      "severity": "string - critical|high|medium|low",
+      "description": "string - what's wrong",
+      "impact": "string - why it matters"
+    }
+  ],
+  "recommendations": [
+    {
+      "metric": "string - metric name",
+      "priority": "string - high|medium|low",
+      "action": "string - what to do",
+      "rationale": "string - why this helps"
+    }
+  ],
+  "improved_code": "string | null - only include when WANT_FIX is yes; otherwise null"
+}
+
+Remember: no code fences, no markdown, and only the JSON structure above. Be thorough but concise in explanations.

@@ -65,9 +65,10 @@ export default function UniversalHomePage() {
       title: '3. Coding & Implementation',
       subtitle: 'From specs to high‑quality code',
       description:
-        'Coming soon: implementation scaffolds, code generation aligned with your SRS, and AI pair‑programming across the stack.',
-      actionLabel: 'Implementation Lab (Soon)',
-      disabled: true,
+        'Generate boilerplate from natural language and translate snippets between languages, aligned with your saved project context.',
+      actionLabel: 'Open Implementation Lab',
+      onClick: () => navigateWithProjectState('/implementation'),
+      disabled: false,
       accentClass: 'badge-yellow',
     },
     {
@@ -75,9 +76,10 @@ export default function UniversalHomePage() {
       title: '4. Testing & Quality',
       subtitle: 'Verification, validation and automation',
       description:
-        'Coming soon: test‑case generation from requirements, coverage guidance, and automated regression testing strategies.',
-      actionLabel: 'Quality Center (Soon)',
-      disabled: true,
+        'Auto-generate test cases, virtually execute them, and get concise failure reports with suggested fixes or improved code.',
+      actionLabel: 'Open Quality Center',
+      onClick: () => navigateWithProjectState('/quality'),
+      disabled: false,
       accentClass: 'badge-red',
     },
   ];

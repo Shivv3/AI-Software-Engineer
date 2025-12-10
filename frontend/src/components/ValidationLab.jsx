@@ -351,9 +351,18 @@ export default function ValidationLab() {
             </label>
 
             {error && (
-              <p className="text-sm" style={{ color: '#b91c1c' }}>
-                {error}
-              </p>
+              <div
+                className="mb-3 p-3 rounded border"
+                style={{ backgroundColor: '#fef2f2', borderColor: '#fecdd3' }}
+              >
+                <div className="text-sm font-semibold" style={{ color: '#b91c1c' }}>
+                  {error}
+                </div>
+                <div className="text-xs text-gray-700 mt-1">
+                  If this is an LLM availability or rate-limit issue, wait a few seconds and retry. Keeping code/context concise can
+                  improve reliability.
+                </div>
+              </div>
             )}
 
             <button className="btn btn-primary w-full" onClick={runTests} disabled={loading}>

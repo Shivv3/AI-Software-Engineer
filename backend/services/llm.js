@@ -4,6 +4,10 @@ console.log('Loading LLM .env from:', envPath);
 require('dotenv').config({ path: envPath });
 const axios = require('axios');
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class RateLimiter {
     constructor(maxRequests, timeWindowMs) {
         this.maxRequests = maxRequests;
@@ -37,76 +41,56 @@ class LLMService {
     }
 
     async generate(prompt) {
-        try {
-            if (!this.apiKey) {
-                throw new Error('GEMINI_API_KEY environment variable is not set');
-            }
-            await rateLimiter.tryAcquire();
-            
-            console.log('Making request with prompt:', prompt);
-            
-            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-            const data = {
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }]
-            };
-            const config = {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                params: {
-                    key: this.apiKey.trim()
-                },
-                timeout: 30000
-            };
-            
-            console.log('Sending request to Gemini API...');
-            const response = await axios.post(url, data, config);
-            console.log('API Response:', JSON.stringify(response.data, null, 2));
-            
-            if (response.data.candidates && 
-                response.data.candidates[0] && 
-                response.data.candidates[0].content && 
-                response.data.candidates[0].content.parts && 
-                response.data.candidates[0].content.parts[0]) {
-                let text = response.data.candidates[0].content.parts[0].text;
-                // Remove markdown code blocks if present
-                text = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-                return text;
-            }
-            
-            throw new Error('Invalid response format from Gemini API');
-        } catch (error) {
-            console.error('Full error details:', error);
-
-            if (error.response) {
-                console.error('Error response:', {
-                    status: error.response.status,
-                    data: error.response.data
-                });
-            }
-
-            if (error.code === 'ECONNABORTED' || error.response?.status === 429) {
-                throw new Error('LLM temporarily unavailable, please try again in a few moments');
-            }
-
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                throw new Error('Invalid API key - please check your configuration');
-            }
-
-            if (error.message.includes('Rate limit exceeded')) {
-                throw error;
-            }
-
-            if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-                throw new Error('Unable to connect to Gemini API - please check your internet connection');
-            }
-
-            throw new Error(error.response?.data?.error?.message || 'LLM service error, please try again');
+        if (!this.apiKey) {
+            throw new Error('GEMINI_API_KEY environment variable is not set');
         }
+
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        const data = {
+            contents: [{
+                parts: [{
+                    text: prompt
+                }]
+            }]
+        };
+        const config = {
+            headers: { 'Content-Type': 'application/json' },
+            params: { key: this.apiKey.trim() },
+            timeout: 60000
+        };
+
+        const maxAttempts = 3;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                await rateLimiter.tryAcquire();
+                console.log(`Gemini request attempt ${attempt}/${maxAttempts}`);
+                const response = await axios.post(url, data, config);
+
+                if (response.data?.candidates?.[0]?.content?.parts?.[0]) {
+                    let text = response.data.candidates[0].content.parts[0].text;
+                    text = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+                    return text;
+                }
+                throw new Error('Invalid response format from Gemini API');
+            } catch (error) {
+                const status = error.response?.status;
+                const transient = error.code === 'ECONNABORTED' || status === 429 || status === 503 || status === 500;
+                const network = error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED';
+                console.error('LLM attempt failed', { attempt, status, code: error.code, message: error.message });
+
+                if (status === 401 || status === 403) {
+                    throw new Error('Invalid API key - please check your configuration');
+                }
+                if (!transient && !network && attempt === maxAttempts) {
+                    throw new Error(error.response?.data?.error?.message || 'LLM service error, please try again');
+                }
+                if (attempt === maxAttempts) {
+                    throw new Error('LLM temporarily unavailable, please try again in a few moments');
+                }
+                await sleep(800 * attempt);
+            }
+        }
+        throw new Error('LLM temporarily unavailable, please try again in a few moments');
     }
 
     resetRateLimit() {

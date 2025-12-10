@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ProjectProvider } from './ProjectContext';
 import ProjectSidebar from './ProjectSidebar';
+import './WorkspaceLayout.css';
 
 const loadProjects = () => {
   try {
@@ -33,16 +34,22 @@ export default function ProjectLayout() {
 
   if (notFound) {
     return (
-      <div className="container" style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
-        <div className="card" style={{ maxWidth: '560px', margin: '0 auto' }}>
-          <h1 className="text-2xl font-bold mb-2">Project not found</h1>
-          <p className="text-sm text-gray-600 mb-4">
-            We could not find this project. It may have been deleted. Please return to the project
-            list and open another workspace.
-          </p>
-          <button className="btn btn-primary" onClick={() => navigate('/')}>
-            Back to projects
-          </button>
+      <div className="workspace-layout">
+        <div className="workspace-background">
+          <div className="gradient-orb gradient-orb-1"></div>
+          <div className="gradient-orb gradient-orb-2"></div>
+        </div>
+        <div className="workspace-container" style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+          <div className="workspace-not-found-card">
+            <h1 className="workspace-not-found-title">Project not found</h1>
+            <p className="workspace-not-found-text">
+              We could not find this project. It may have been deleted. Please return to the project
+              list and open another workspace.
+            </p>
+            <button className="gradient-button" onClick={() => navigate('/')}>
+              <span>Back to projects</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -50,16 +57,15 @@ export default function ProjectLayout() {
 
   return (
     <ProjectProvider projectId={projectId} projectName={projectName}>
-      <div
-        style={{
-          minHeight: '100vh',
-          background:
-            'radial-gradient(circle at top left, #e0f2fe 0, transparent 55%), radial-gradient(circle at bottom right, #ede9fe 0, transparent 55%), #f9fafb',
-        }}
-      >
-        <div className="container" style={{ paddingTop: '2rem', paddingBottom: '2rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '1rem' }}>
-            <div style={{ minWidth: 0 }}>
+      <div className="workspace-layout">
+        <div className="workspace-background">
+          <div className="gradient-orb gradient-orb-1"></div>
+          <div className="gradient-orb gradient-orb-2"></div>
+          <div className="gradient-orb gradient-orb-3"></div>
+        </div>
+        <div className="workspace-container" style={{ paddingTop: '2rem', paddingBottom: '2rem' }}>
+          <div className="workspace-grid">
+            <div className="workspace-content">
               <Outlet />
             </div>
             <ProjectSidebar />

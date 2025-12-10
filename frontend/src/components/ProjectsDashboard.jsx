@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import './ProjectsDashboard.css';
 
 const PROJECTS_KEY = 'ase.projects';
 const PROJECT_DATA_PREFIX = 'ase.project.data.';
@@ -79,36 +80,41 @@ export default function ProjectsDashboard() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background:
-          'radial-gradient(circle at top left, #e0f2fe 0, transparent 55%), radial-gradient(circle at bottom right, #ede9fe 0, transparent 55%), #f9fafb',
-      }}
-    >
-      <div className="container" style={{ paddingTop: '2.5rem', paddingBottom: '2.5rem' }}>
-        <header className="mb-8">
-          <div className="mb-2">
-            <span className="badge badge-blue">AI Software Engineer</span>
+    <div className="projects-dashboard">
+      <div className="dashboard-background">
+        <div className="gradient-orb gradient-orb-1"></div>
+        <div className="gradient-orb gradient-orb-2"></div>
+        <div className="gradient-orb gradient-orb-3"></div>
+      </div>
+      
+      <div className="dashboard-container">
+        <header className="dashboard-header">
+          <div className="header-badge-wrapper">
+            <span className="header-badge">
+              <span className="badge-icon">⚡</span>
+              AI Software Engineer
+            </span>
           </div>
-          <h1 className="text-2xl font-bold" style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}>
-            Manage your projects.
+          <h1 className="dashboard-title">
+            Manage your projects
           </h1>
-          <p className="text-gray-600" style={{ maxWidth: '640px' }}>
+          <p className="dashboard-subtitle">
             Create a project to spin up a dedicated SDLC workspace. Each project gets its own
             Universal Home, requirements workspace, and design studio.
           </p>
         </header>
 
-        <section className="card" style={{ marginBottom: '1.5rem' }}>
-          <h2 className="text-xl font-semibold mb-2">Create a new project</h2>
-          <p className="text-sm text-gray-600 mb-3">
+        <section className="create-project-card">
+          <div className="card-header">
+            <h2 className="card-title">Create a new project</h2>
+            <div className="card-accent-line"></div>
+          </div>
+          <p className="card-description">
             Give your project a name to create a fresh workspace.
           </p>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div className="create-project-form">
             <input
-              className="input"
-              style={{ minWidth: '260px' }}
+              className="modern-input"
               type="text"
               placeholder="e.g., Payment Platform Revamp"
               value={newProjectName}
@@ -116,57 +122,82 @@ export default function ProjectsDashboard() {
                 setNewProjectName(e.target.value);
                 setError('');
               }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreate();
+                }
+              }}
             />
-            <button className="btn btn-primary" onClick={handleCreate}>
-              Create Project
+            <button className="gradient-button" onClick={handleCreate}>
+              <span>Create Project</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
             </button>
           </div>
           {error && (
-            <p className="text-sm" style={{ color: '#b91c1c', marginTop: '0.5rem' }}>
+            <p className="error-message">
+              <span className="error-icon">⚠</span>
               {error}
             </p>
           )}
         </section>
 
-        <section>
-          <div className="mb-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 className="text-lg font-semibold mb-0">Your projects</h2>
-            <span className="badge badge-gray">{projects.length} total</span>
+        <section className="projects-section">
+          <div className="section-header">
+            <h2 className="section-title">Your projects</h2>
+            <span className="project-count-badge">{projects.length} {projects.length === 1 ? 'project' : 'projects'}</span>
           </div>
 
           {projects.length === 0 && (
-            <div className="card">
-              <p className="text-sm text-gray-600">
+            <div className="empty-state-card">
+              <div className="empty-state-icon">📁</div>
+              <p className="empty-state-text">
                 No projects yet. Create one to get started with the AI Software Engineer workflow.
               </p>
             </div>
           )}
 
           {projects.length > 0 && (
-            <div
-              className="grid"
-              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}
-            >
+            <div className="projects-grid">
               {projects.map((project) => (
-                <section key={project.id} className="card" style={{ position: 'relative' }}>
-                  <div style={{ position: 'relative' }}>
-                    <div className="mb-2" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="badge badge-blue">Project</span>
-                      <button className="btn btn-link text-sm" onClick={() => setDeleteTarget(project)}>
-                        Delete
+                <div key={project.id} className="project-card">
+                  <div className="project-card-content">
+                    <div className="project-card-header">
+                      <span className="project-badge">
+                        <span className="project-badge-dot"></span>
+                        Project
+                      </span>
+                      <button 
+                        className="delete-button" 
+                        onClick={() => setDeleteTarget(project)}
+                        title="Delete project"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
                       </button>
                     </div>
-                    <h3 className="text-xl font-semibold mb-1" style={{ wordBreak: 'break-word' }}>
-                      {project.name}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Created {new Date(project.createdAt).toLocaleDateString()}
+                    <h3 className="project-name">{project.name}</h3>
+                    <p className="project-date">
+                      Created {new Date(project.createdAt).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      })}
                     </p>
-                    <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => openProject(project)}>
-                      Open workspace
+                    <button 
+                      className="project-open-button" 
+                      onClick={() => openProject(project)}
+                    >
+                      <span>Open workspace</span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </button>
                   </div>
-                </section>
+                  <div className="project-card-glow"></div>
+                </div>
               ))}
             </div>
           )}
@@ -174,28 +205,25 @@ export default function ProjectsDashboard() {
       </div>
 
       {deleteTarget && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-          }}
-        >
-          <div className="card" style={{ width: '100%', maxWidth: '420px', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.35)' }}>
-            <h2 className="text-xl font-semibold mb-2">Delete project?</h2>
-            <p className="text-sm text-gray-600 mb-4">
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-icon-wrapper">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <h2 className="modal-title">Delete project?</h2>
+            </div>
+            <p className="modal-description">
               Are you sure you want to delete <strong>{deleteTarget.name}</strong>? This will remove
-              this project and its saved progress.
+              this project and its saved progress. This action cannot be undone.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button className="btn" onClick={() => setDeleteTarget(null)}>
+            <div className="modal-actions">
+              <button className="modal-button-cancel" onClick={() => setDeleteTarget(null)}>
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={handleConfirmDelete}>
+              <button className="modal-button-delete" onClick={handleConfirmDelete}>
                 Yes, delete
               </button>
             </div>

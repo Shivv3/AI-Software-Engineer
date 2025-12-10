@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import ResultsPanel from './ResultsPanel';
 import { useProjectContext } from './ProjectContext';
+import './HomePage.css';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -254,100 +255,162 @@ export default function HomePage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h1 className="text-2xl font-bold">Project Analysis Tool</h1>
-        {projectId && (
-          <div className="text-sm text-gray-600">
-            Project: <strong>{projectName || projectData.title || 'Untitled project'}</strong>
-          </div>
-        )}
-      </div>
-      <div className="mb-2">
+    <div className="requirements-workspace">
+      <div className="requirements-header">
+        <div className="requirements-header-top">
+          <h1 className="requirements-title">Project Analysis Tool</h1>
+          {projectId && (
+            <div className="requirements-project-info">
+              Project: <strong>{projectName || projectData.title || 'Untitled project'}</strong>
+            </div>
+          )}
+        </div>
         <button
+          className="requirements-back-button"
           onClick={() => navigate(`/projects/${projectId || ''}`)}
-          className="px-3 py-2 bg-gray-100 rounded text-sm"
         >
-          ← Back to Workspace
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>Back to Workspace</span>
         </button>
       </div>
       
-      <div className="mb-6">
-        <input
-          type="text"
-          name="title"
-          placeholder="Project Title"
-          value={projectData.title}
-          onChange={handleInputChange}
-          className="w-full p-2 mb-4 border rounded"
-        />
-
-        <textarea
-          name="description"
-          placeholder="Project Description"
-          value={projectData.description}
-          onChange={handleInputChange}
-          className="w-full p-2 mb-4 border rounded h-32"
-        />
-
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <input
-            type="text"
-            name="teamSize"
-            placeholder="Team Size"
-            value={projectData.teamSize}
-            onChange={handleInputChange}
-            className="p-2 border rounded"
-          />
-          <input
-            type="text"
-            name="timeline"
-            placeholder="Timeline (months)"
-            value={projectData.timeline}
-            onChange={handleInputChange}
-            className="p-2 border rounded"
-          />
-          <input
-            type="text"
-            name="budget"
-            placeholder="Budget (optional)"
-            value={projectData.budget}
-            onChange={handleInputChange}
-            className="p-2 border rounded"
-          />
+      <div className="requirements-form-card">
+        <div className="requirements-form-header">
+          <h2 className="requirements-form-title">Project Information</h2>
+          <div className="requirements-accent-line"></div>
         </div>
 
-        <div className="flex gap-4">
-          <button
-            onClick={recommendSDLC}
-            disabled={loading.sdlc || !projectData.description}
-            className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
-          >
-            {loading.sdlc ? 'Analyzing...' : 'Recommend SDLC'}
-          </button>
-          
-          <button
-            onClick={generatePlan}
-            disabled={loading.plan || !projectData.description}
-            className="px-4 py-2 bg-green-500 text-white rounded disabled:bg-gray-400"
-          >
-            {loading.plan ? 'Generating...' : 'Generate Project Plan'}
-          </button>
+        <div className="requirements-form-content">
+          <input
+            type="text"
+            name="title"
+            placeholder="Project Title"
+            value={projectData.title}
+            onChange={handleInputChange}
+            className="requirements-input"
+          />
 
-          <button
-            onClick={generateRequirements}
-            disabled={loading.requirements || !projectData.description}
-            className="px-4 py-2 bg-yellow-500 text-white rounded disabled:bg-gray-400"
-          >
-            {loading.requirements ? 'Generating...' : 'Generate Implicit Requirements'}
-          </button>
+          <textarea
+            name="description"
+            placeholder="Project Description"
+            value={projectData.description}
+            onChange={handleInputChange}
+            className="requirements-textarea"
+            rows="6"
+          />
 
-          <button
-            onClick={() => navigate(projectId ? `/projects/${projectId}/srs-editor` : '/srs-editor')}
-            className="px-4 py-2 bg-purple-500 text-white rounded"
-          >
-            SRS Editor
-          </button>
+          <div className="requirements-grid">
+            <input
+              type="text"
+              name="teamSize"
+              placeholder="Team Size"
+              value={projectData.teamSize}
+              onChange={handleInputChange}
+              className="requirements-input"
+            />
+            <input
+              type="text"
+              name="timeline"
+              placeholder="Timeline (months)"
+              value={projectData.timeline}
+              onChange={handleInputChange}
+              className="requirements-input"
+            />
+            <input
+              type="text"
+              name="budget"
+              placeholder="Budget (optional)"
+              value={projectData.budget}
+              onChange={handleInputChange}
+              className="requirements-input"
+            />
+          </div>
+
+          <div className="requirements-actions">
+            <button
+              onClick={recommendSDLC}
+              disabled={loading.sdlc || !projectData.description}
+              className={`requirements-action-button requirements-button-sdlc ${loading.sdlc || !projectData.description ? 'disabled' : ''}`}
+            >
+              {loading.sdlc ? (
+                <>
+                  <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                      <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                    </circle>
+                  </svg>
+                  <span>Analyzing...</span>
+                </>
+              ) : (
+                <>
+                  <span>Recommend SDLC</span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={generatePlan}
+              disabled={loading.plan || !projectData.description}
+              className={`requirements-action-button requirements-button-plan ${loading.plan || !projectData.description ? 'disabled' : ''}`}
+            >
+              {loading.plan ? (
+                <>
+                  <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                      <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                    </circle>
+                  </svg>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate Project Plan</span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={generateRequirements}
+              disabled={loading.requirements || !projectData.description}
+              className={`requirements-action-button requirements-button-requirements ${loading.requirements || !projectData.description ? 'disabled' : ''}`}
+            >
+              {loading.requirements ? (
+                <>
+                  <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                      <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                    </circle>
+                  </svg>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate Implicit Requirements</span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => navigate(projectId ? `/projects/${projectId}/srs-editor` : '/srs-editor')}
+              className="requirements-action-button requirements-button-srs"
+            >
+              <span>SRS Editor</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 

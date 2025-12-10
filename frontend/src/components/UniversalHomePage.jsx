@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import './UniversalHomePage.css';
 
 export default function UniversalHomePage() {
   const navigate = useNavigate();
@@ -124,22 +125,16 @@ export default function UniversalHomePage() {
 
   if (projectId && projectNotFound) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background:
-            'radial-gradient(circle at top left, #e0f2fe 0, transparent 55%), radial-gradient(circle at bottom right, #ede9fe 0, transparent 55%), #f9fafb',
-        }}
-      >
-        <div className="container" style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
-          <div className="card" style={{ maxWidth: '560px', margin: '0 auto' }}>
-            <h1 className="text-2xl font-bold mb-2">Project not found</h1>
-            <p className="text-sm text-gray-600 mb-4">
+      <div className="workspace-not-found">
+        <div className="workspace-container" style={{ paddingTop: '3rem', paddingBottom: '3rem' }}>
+          <div className="workspace-not-found-card">
+            <h1 className="workspace-not-found-title">Project not found</h1>
+            <p className="workspace-not-found-text">
               We could not find this project. It may have been deleted. Please return to the project
               list and open another workspace.
             </p>
-            <button className="btn btn-primary" onClick={() => navigate('/')}>
-              Back to projects
+            <button className="gradient-button" onClick={() => navigate('/')}>
+              <span>Back to projects</span>
             </button>
           </div>
         </div>
@@ -148,36 +143,33 @@ export default function UniversalHomePage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background:
-          'radial-gradient(circle at top left, #e0f2fe 0, transparent 55%), radial-gradient(circle at bottom right, #ede9fe 0, transparent 55%), #f9fafb',
-      }}
-    >
-      <div className="container">
+    <div className="universal-homepage">
+      <div className="workspace-container">
         {/* Hero */}
-        <header className="mb-8" style={{ paddingTop: '2.5rem' }}>
+        <header className="homepage-header">
           {projectId && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary" onClick={() => navigate('/')}>
-                ← Back to projects
+            <div className="homepage-nav">
+              <button className="homepage-back-button" onClick={() => navigate('/')}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Back to projects</span>
               </button>
-              <span className="text-sm text-gray-700">
+              <span className="homepage-project-info">
                 Working on <strong>{projectName || 'Untitled project'}</strong>
               </span>
             </div>
           )}
-          <div className="mb-2">
-            <span className="badge badge-blue">AI Software Engineer</span>
+          <div className="homepage-badge-wrapper">
+            <span className="homepage-badge">
+              <span className="badge-icon">⚡</span>
+              AI Software Engineer
+            </span>
           </div>
-          <h1
-            className="text-2xl font-bold"
-            style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}
-          >
+          <h1 className="homepage-title">
             Orchestrate your entire Software Development Lifecycle in one place.
           </h1>
-          <p className="text-gray-600" style={{ maxWidth: '640px' }}>
+          <p className="homepage-subtitle">
             This universal homepage is your command center. Start from requirements, move through
             design and implementation, and finish with robust testing – with AI assisting you at
             every step.
@@ -185,45 +177,27 @@ export default function UniversalHomePage() {
         </header>
 
         {/* Phases grid */}
-        <main
-          className="grid"
-          style={{
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: '1.5rem',
-            marginBottom: '3rem',
-          }}
-        >
+        <main className="phases-grid">
           {phases.map((phase) => (
-            <section key={phase.id} className="card" style={{ position: 'relative', overflow: 'hidden' }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  opacity: 0.03,
-                  background:
-                    phase.id === 'requirements'
-                      ? 'linear-gradient(135deg, #3b82f6, #6366f1)'
-                      : phase.id === 'design'
-                      ? 'linear-gradient(135deg, #10b981, #14b8a6)'
-                      : phase.id === 'implementation'
-                      ? 'linear-gradient(135deg, #f59e0b, #f97316)'
-                      : 'linear-gradient(135deg, #ef4444, #f97373)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <div style={{ position: 'relative' }}>
-                <div className="mb-2">
-                  <span className={`badge ${phase.accentClass}`}>{phase.title}</span>
+            <section key={phase.id} className={`phase-card phase-${phase.id}`}>
+              <div className="phase-card-glow"></div>
+              <div className="phase-card-content">
+                <div className="phase-badge-wrapper">
+                  <span className={`phase-badge phase-badge-${phase.id}`}>{phase.title}</span>
                 </div>
-                <h2 className="text-xl font-semibold mb-1">{phase.subtitle}</h2>
-                <p className="text-sm text-gray-600 mb-4">{phase.description}</p>
+                <h2 className="phase-subtitle">{phase.subtitle}</h2>
+                <p className="phase-description">{phase.description}</p>
                 <button
-                  className="btn btn-primary"
+                  className={`phase-action-button ${phase.disabled ? 'disabled' : ''}`}
                   onClick={() => handlePhaseClick(phase)}
                   disabled={phase.disabled}
-                  style={{ width: '100%', marginTop: '0.5rem' }}
                 >
                   {phase.actionLabel}
+                  {!phase.disabled && (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                 </button>
               </div>
             </section>
@@ -231,12 +205,12 @@ export default function UniversalHomePage() {
         </main>
 
         {/* Footer hint */}
-        <footer className="text-sm text-gray-600" style={{ paddingBottom: '2rem' }}>
-          Tip: Start with <strong>Requirements & Analysis</strong> to feed high‑quality inputs into
+        <footer className="homepage-footer">
+          <span className="footer-icon">💡</span>
+          <span>Tip: Start with <strong>Requirements & Analysis</strong> to feed high‑quality inputs into
           every other phase of your AI‑assisted SDLC. To enter a later phase, upload the major
-          output document from the previous phase when prompted.
+          output document from the previous phase when prompted.</span>
         </footer>
-
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useProjectContext } from './ProjectContext';
+import './ProjectSidebar.css';
 
 const prettySize = (bytes) => {
   if (!bytes && bytes !== 0) return '';
@@ -80,38 +81,39 @@ export default function ProjectSidebar() {
 
   return (
     <>
-      <aside
-        className="card"
-        style={{
-          width: isSidebarCollapsed ? '52px' : '320px',
-          transition: 'width 0.2s ease',
-          position: 'sticky',
-          top: '16px',
-          alignSelf: 'flex-start',
-          padding: isSidebarCollapsed ? '0.5rem' : '1rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+      <aside className={`project-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
           {!isSidebarCollapsed && (
-            <div>
-              <div className="text-sm text-gray-500">Project</div>
-              <div className="font-semibold">{projectName || 'Untitled project'}</div>
+            <div className="sidebar-project-info">
+              <div className="sidebar-project-label">Project</div>
+              <div className="sidebar-project-name">{projectName || 'Untitled project'}</div>
             </div>
           )}
           <button
-            className="btn btn-secondary"
-            style={{ padding: '0.35rem 0.5rem' }}
+            className="sidebar-toggle-button"
             onClick={() => setIsSidebarCollapsed((v) => !v)}
+            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {isSidebarCollapsed ? '»' : '«'}
+            {isSidebarCollapsed ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
           </button>
         </div>
 
         {!isSidebarCollapsed && (
           <>
-            <div className="mt-3" style={{ display: 'flex', gap: '0.5rem' }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => uploadRef.current?.click()}>
-                + Upload
+            <div className="sidebar-upload-section">
+              <button className="sidebar-upload-button" onClick={() => uploadRef.current?.click()}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span>Upload Document</span>
               </button>
               <input
                 ref={uploadRef}
@@ -122,107 +124,100 @@ export default function ProjectSidebar() {
               />
             </div>
 
-            <div className="mt-3">
-              <div className="text-sm font-semibold mb-2">Project Documents</div>
+            <div className="sidebar-documents-section">
+              <div className="sidebar-section-title">Project Documents</div>
               {documents.length === 0 && (
-                <div className="text-sm text-gray-600">Nothing saved yet. Generate or upload to see items here.</div>
+                <div className="sidebar-empty-state">
+                  <div className="sidebar-empty-icon">📁</div>
+                  <p>Nothing saved yet. Generate or upload to see items here.</p>
+                </div>
               )}
-              <div className="space-y-2" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              <div className="sidebar-documents-list">
                 {documents.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-2 rounded border"
-                    style={{
-                      backgroundColor: '#f8fafc',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto auto auto',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div className="text-sm font-semibold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {doc.name}
-                      </div>
-                      <div className="text-xs text-gray-600" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div key={doc.id} className="sidebar-document-item">
+                    <div className="document-item-content">
+                      <div className="document-item-name">{doc.name}</div>
+                      <div className="document-item-meta">
                         {doc.type || 'Document'} · {doc.size ? prettySize(doc.size) + ' · ' : ''}
                         {new Date(doc.createdAt).toLocaleTimeString()}
                       </div>
                     </div>
-                    <button className="btn btn-secondary text-xs" title="Preview" onClick={() => setPreviewDoc(doc)} style={{ padding: '0.25rem 0.5rem' }}>
-                      👁
-                    </button>
-                    <button className="btn btn-secondary text-xs" title="Download" onClick={() => handleDownload(doc)} style={{ padding: '0.25rem 0.5rem' }}>
-                      ⬇
-                    </button>
-                    <button
-                      className="btn btn-secondary text-xs"
-                      title="Use in AI context"
-                      onClick={() => toggleUseAsContext(doc.id)}
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        backgroundColor: doc.useAsContext ? '#e0f2fe' : undefined,
-                      }}
-                    >
-                      ✓
-                    </button>
-                    <button className="btn btn-link text-xs" title="Delete" onClick={() => setConfirmDelete(doc)} style={{ padding: '0.25rem 0.35rem' }}>
-                      🗑
-                    </button>
+                    <div className="document-item-actions">
+                      <button
+                        className="document-action-button"
+                        title="Preview"
+                        onClick={() => setPreviewDoc(doc)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 3C5 3 2.73 5.11 1 8C2.73 10.89 5 13 8 13C11 13 13.27 10.89 15 8C13.27 5.11 11 3 8 3ZM8 11C6.34 11 5 9.66 5 8C5 6.34 6.34 5 8 5C9.66 5 11 6.34 11 8C11 9.66 9.66 11 8 11ZM8 6.5C7.17 6.5 6.5 7.17 6.5 8C6.5 8.83 7.17 9.5 8 9.5C8.83 9.5 9.5 8.83 9.5 8C9.5 7.17 8.83 6.5 8 6.5Z" fill="currentColor"/>
+                        </svg>
+                      </button>
+                      <button
+                        className="document-action-button"
+                        title="Download"
+                        onClick={() => handleDownload(doc)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 11L3 6H6V1H10V6H13L8 11Z" fill="currentColor"/>
+                          <path d="M2 13H14V15H2V13Z" fill="currentColor"/>
+                        </svg>
+                      </button>
+                      <button
+                        className={`document-action-button ${doc.useAsContext ? 'active' : ''}`}
+                        title="Use in AI context"
+                        onClick={() => toggleUseAsContext(doc.id)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M13.5 2L6 9.5L2.5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      <button
+                        className="document-action-button delete"
+                        title="Delete"
+                        onClick={() => setConfirmDelete(doc)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
             {error && (
-              <p className="text-sm" style={{ color: '#b91c1c', marginTop: '0.5rem' }}>
+              <div className="sidebar-error">
+                <span className="error-icon">⚠</span>
                 {error}
-              </p>
+              </div>
             )}
           </>
         )}
       </aside>
 
       {previewDoc && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-          }}
-        >
-          <div className="card" style={{ width: '90%', maxWidth: '800px', maxHeight: '85vh', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div className="modal-overlay" onClick={() => setPreviewDoc(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
               <div>
-                <div className="text-lg font-semibold">{previewDoc.name}</div>
-                <div className="text-sm text-gray-600">{previewDoc.type || 'Document'}</div>
+                <div className="modal-title">{previewDoc.name}</div>
+                <div className="modal-subtitle">{previewDoc.type || 'Document'}</div>
               </div>
-              <button className="btn" onClick={() => setPreviewDoc(null)}>
-                Close
+              <button className="modal-close-button" onClick={() => setPreviewDoc(null)}>
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
               </button>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: '70vh' }}>
+            <div className="modal-content">
               {previewDoc.content?.startsWith('data:') ? (
                 <iframe
                   title={previewDoc.name}
                   src={previewDoc.content}
-                  style={{ width: '100%', height: '70vh', border: 'none' }}
+                  style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '0.5rem' }}
                 />
               ) : (
-                <pre
-                  style={{
-                    whiteSpace: 'pre-wrap',
-                    backgroundColor: '#f8fafc',
-                    padding: '1rem',
-                    borderRadius: '0.5rem',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {previewDoc.content}
-                </pre>
+                <pre className="modal-pre-content">{previewDoc.content}</pre>
               )}
             </div>
           </div>
@@ -230,28 +225,25 @@ export default function ProjectSidebar() {
       )}
 
       {confirmDelete && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-          }}
-        >
-          <div className="card" style={{ width: '100%', maxWidth: '420px', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.35)' }}>
-            <h2 className="text-xl font-semibold mb-2">Delete document?</h2>
-            <p className="text-sm text-gray-600 mb-4">
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-icon-wrapper">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <h2 className="modal-title">Delete document?</h2>
+            </div>
+            <p className="modal-description">
               Are you sure you want to delete <strong>{confirmDelete.name}</strong>? This will remove it from the project.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button className="btn" onClick={() => setConfirmDelete(null)}>
+            <div className="modal-actions">
+              <button className="modal-button-cancel" onClick={() => setConfirmDelete(null)}>
                 Cancel
               </button>
               <button
-                className="btn btn-primary"
+                className="modal-button-delete"
                 onClick={() => {
                   removeDocument(confirmDelete.id);
                   setConfirmDelete(null);
@@ -266,4 +258,3 @@ export default function ProjectSidebar() {
     </>
   );
 }
-

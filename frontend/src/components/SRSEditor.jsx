@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+  import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import axios from 'axios';
 import { useProjectContext } from './ProjectContext';
+import './SRSEditor.css';
 
 const SECTION_MAPPING = {
   '1_introduction': 'Introduction',
@@ -293,24 +294,29 @@ export default function SRSEditor() {
   // Wizard Step - Project Description
   if (currentStep === 'description') {
     return (
-      <div className="container mx-auto p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">SRS Wizard</h1>
-            <button
-              onClick={() => navigate(`/projects/${routeProjectId}/requirements`)}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              Back to Requirements
-            </button>
+      <div className="srs-editor">
+        <div className="workspace-container">
+          <div className="srs-editor-header">
+            <h1 className="srs-editor-title">SRS Wizard</h1>
+            <div className="srs-editor-actions">
+              <button
+                className="srs-editor-button srs-editor-button-secondary"
+                onClick={() => navigate(`/projects/${routeProjectId}/requirements`)}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Back to Requirements</span>
+              </button>
+            </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Project Description</h2>
-            <p className="text-gray-600 mb-4">
+          <div className="srs-editor-card">
+            <h2 className="srs-editor-card-title">Project Description</h2>
+            <p className="srs-editor-card-description">
               Please provide a detailed description of your software project. This will be used to generate targeted questions for each section of the SRS document following IEEE Std 830-1998.
             </p>
-            <ul className="list-disc list-inside text-gray-600 mb-6 space-y-1">
+            <ul style={{ listStyle: 'disc', paddingLeft: '1.5rem', color: '#94a3b8', marginBottom: '1.5rem', lineHeight: '1.8' }}>
               <li>Project objectives and goals</li>
               <li>Target users and stakeholders</li>
               <li>Key features and functionality</li>
@@ -322,16 +328,33 @@ export default function SRSEditor() {
               value={projectDescription}
               onChange={(e) => setProjectDescription(e.target.value)}
               placeholder="Enter your detailed project description here..."
-              className="w-full h-64 p-4 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="srs-editor-textarea"
+              style={{ minHeight: '200px' }}
             />
 
-            <div className="mt-6 flex justify-end">
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleGenerateSRS}
                 disabled={generateLoading || !projectDescription.trim()}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="srs-editor-generate-button"
               >
-                {generateLoading ? 'Generating Questions...' : 'Generate SRS Questions'}
+                {generateLoading ? (
+                  <>
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                        <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    <span>Generating Questions...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Generate SRS Questions</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -343,150 +366,186 @@ export default function SRSEditor() {
   // Questions Step
   if (currentStep === 'questions') {
     const subsection = getCurrentSubsection();
-    if (!subsection) return <div>Loading...</div>;
+    if (!subsection) return <div className="srs-editor" style={{ padding: '2rem', textAlign: 'center', color: '#f1f5f9' }}>Loading...</div>;
 
     const answerKey = getAnswerKey(srsStructure[currentSectionIndex].section_id, subsection.subsection_id);
     const subsectionAnswers = answers[answerKey] || {};
 
     return (
-      <div className="container mx-auto p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">SRS Question & Answer</h1>
-            <div className="flex gap-2">
+      <div className="srs-editor">
+        <div className="workspace-container">
+          <div className="srs-editor-header">
+            <h1 className="srs-editor-title">SRS Question & Answer</h1>
+            <div className="srs-editor-actions">
               <button
+                className="srs-editor-button srs-editor-button-secondary"
                 onClick={() => setCurrentStep('description')}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
               >
-                Back to Description
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Back to Description</span>
               </button>
               {savedSections.length > 0 && (
                 <>
                   <button
+                    className="srs-editor-button srs-editor-button-primary"
                     onClick={() => setCurrentStep('progress')}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                   >
-                    View Progress
+                    <span>View Progress</span>
                   </button>
                   <button
+                    className="srs-editor-button srs-editor-button-primary"
                     onClick={() => setCurrentStep('review')}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
                   >
-                    Final Review
+                    <span>Final Review</span>
                   </button>
                 </>
               )}
               {savedSections.length > 0 && (
                 <button
+                  className="srs-editor-button srs-editor-button-primary"
                   onClick={handleExportSRS}
                   disabled={exportLoading}
-                  className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
                 >
-                  {exportLoading ? 'Exporting...' : 'Export DOCX'}
+                  {exportLoading ? (
+                    <>
+                      <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                          <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                        </circle>
+                      </svg>
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Export DOCX</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
           </div>
 
           {/* Progress bar */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
+          <div className="srs-editor-progress">
+            <div className="srs-editor-progress-header">
               <span>Progress: {getProgressPercentage()}% Complete</span>
-              <div className="flex items-center gap-4">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <span>{savedSections.length} / {srsStructure.reduce((total, section) => total + section.subsections.length, 0)} sections</span>
                 {savedSections.length > 0 && (
-                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
+                  <span style={{ padding: '0.25rem 0.625rem', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '50px', fontSize: '0.75rem', color: '#6ee7b7' }}>
                     Document Available
                   </span>
                 )}
               </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="srs-editor-progress-bar">
               <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                className="srs-editor-progress-fill" 
                 style={{ width: `${getProgressPercentage()}%` }}
               ></div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="srs-editor-grid">
             {/* Questions Panel */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold">
-                    {srsStructure[currentSectionIndex].section_title}
-                  </h2>
-                  <h3 className="text-lg text-gray-600">
-                    {subsection.subsection_title}
-                  </h3>
-                </div>
+            <div className="srs-editor-questions-panel">
+              <div className="srs-editor-section-info">
+                <h2 className="srs-editor-section-title">
+                  {srsStructure[currentSectionIndex].section_title}
+                </h2>
+                <h3 className="srs-editor-subsection-title">
+                  {subsection.subsection_title}
+                </h3>
+              </div>
 
-                <div className="space-y-6">
-                  {subsection.questions.map((question, index) => (
-                    <div key={index} className="border-l-4 border-blue-500 pl-4">
-                      <label className="block text-sm font-medium mb-2">
-                        Question {index + 1}:
-                      </label>
-                      <p className="text-gray-700 mb-3">{question}</p>
-                      <textarea
-                        value={subsectionAnswers[index] || ''}
-                        onChange={(e) => handleAnswerChange(index, e.target.value)}
-                        placeholder="Enter your answer here..."
-                        className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  ))}
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {subsection.questions.map((question, index) => (
+                  <div key={index} className="srs-editor-question-item">
+                    <label className="srs-editor-question-label">
+                      Question {index + 1}:
+                    </label>
+                    <p className="srs-editor-question-text">{question}</p>
+                    <textarea
+                      value={subsectionAnswers[index] || ''}
+                      onChange={(e) => handleAnswerChange(index, e.target.value)}
+                      placeholder="Enter your answer here..."
+                      className="srs-editor-answer-textarea"
+                    />
+                  </div>
+                ))}
+              </div>
 
-                <div className="mt-6 flex justify-between">
-                  <button
-                    onClick={handlePreviousSubsection}
-                    disabled={currentSectionIndex === 0 && currentSubsectionIndex === 0}
-                    className="px-4 py-2 bg-gray-500 text-white rounded disabled:bg-gray-300"
-                  >
-                    Previous
-                  </button>
-                  
-                  <button
-                    onClick={handleGenerateContent}
-                    disabled={!isSubsectionComplete() || contentLoading}
-                    className="px-6 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400"
-                  >
-                    {contentLoading ? 'Generating...' : 'Generate Content'}
-                  </button>
-                </div>
+              <div className="srs-editor-actions-bottom">
+                <button
+                  className="srs-editor-nav-button"
+                  onClick={handlePreviousSubsection}
+                  disabled={currentSectionIndex === 0 && currentSubsectionIndex === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Previous</span>
+                </button>
+                
+                <button
+                  className="srs-editor-generate-button"
+                  onClick={handleGenerateContent}
+                  disabled={!isSubsectionComplete() || contentLoading}
+                >
+                  {contentLoading ? (
+                    <>
+                      <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                          <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                        </circle>
+                      </svg>
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Generate Content</span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
             {/* Content Preview Panel */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Generated Content</h3>
+            <div className="srs-editor-sidebar">
+              <div className="srs-editor-preview-card">
+                <h3 className="srs-editor-preview-title">Generated Content</h3>
                 
                 {generatedContent ? (
                   <div>
-                    <div className="mb-4 p-3 bg-gray-50 rounded-lg max-h-96 overflow-y-auto">
-                      <pre className="whitespace-pre-wrap text-sm">{generatedContent}</pre>
+                    <div className="srs-editor-preview-content">
+                      {generatedContent}
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="srs-editor-preview-actions">
                       <button
+                        className="srs-editor-accept-button"
                         onClick={handleSaveContent}
-                        className="px-4 py-2 bg-green-500 text-white rounded flex-1"
                       >
-                        Accept & Continue
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M13.5 2L6 9.5L2.5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <span>Accept & Continue</span>
                       </button>
                       <button
+                        className="srs-editor-regenerate-button"
                         onClick={() => setGeneratedContent('')}
-                        className="px-4 py-2 bg-yellow-500 text-white rounded"
                       >
-                        Regenerate
+                        <span>Regenerate</span>
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500">
+                  <p className="srs-editor-preview-placeholder">
                     {contentLoading ? 'Generating content...' : 'Answer all questions to generate content'}
                   </p>
                 )}
@@ -494,33 +553,46 @@ export default function SRSEditor() {
 
               {/* Quick Actions */}
               {savedSections.length > 0 && (
-                <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-                  <div className="flex flex-col gap-2">
+                <div className="srs-editor-preview-card" style={{ marginTop: '1.5rem' }}>
+                  <h3 className="srs-editor-preview-title">Quick Actions</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button
+                      className="srs-editor-button srs-editor-button-primary"
                       onClick={() => setCurrentStep('progress')}
-                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                      style={{ fontSize: '0.875rem', padding: '0.625rem 1rem' }}
                     >
-                      📊 View Progress & Document
+                      <span>📊 View Progress & Document</span>
                     </button>
                     <button
+                      className="srs-editor-button srs-editor-button-primary"
                       onClick={handleExportSRS}
                       disabled={exportLoading}
-                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm disabled:bg-gray-400"
+                      style={{ fontSize: '0.875rem', padding: '0.625rem 1rem' }}
                     >
-                      💾 {exportLoading ? 'Exporting...' : 'Quick Export'}
+                      {exportLoading ? (
+                        <>
+                          <svg className="spinner" width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                              <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                            </circle>
+                          </svg>
+                          <span>Exporting...</span>
+                        </>
+                      ) : (
+                        <span>💾 Quick Export</span>
+                      )}
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Section Navigation */}
-              <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Section Navigation</h3>
-                <div className="space-y-2">
+              <div className="srs-editor-navigation-card" style={{ marginTop: '1.5rem' }}>
+                <h3 className="srs-editor-nav-title">Section Navigation</h3>
+                <div className="srs-editor-nav-list">
                   {srsStructure.map((section, sectionIndex) => (
-                    <div key={section.section_id}>
-                      <div className="font-medium text-gray-700">{section.section_title}</div>
+                    <div key={section.section_id} className="srs-editor-nav-section">
+                      <div className="srs-editor-nav-section-title">{section.section_title}</div>
                       {section.subsections.map((subsec, subsecIndex) => {
                         const isCurrentSubsection = sectionIndex === currentSectionIndex && subsecIndex === currentSubsectionIndex;
                         const sectionKey = `${section.section_id.replace(/\./g, '_')}_${subsec.subsection_id.replace(/\./g, '_')}`;
@@ -529,20 +601,14 @@ export default function SRSEditor() {
                         return (
                           <div
                             key={subsec.subsection_id}
-                            className={`ml-4 p-2 rounded cursor-pointer text-sm ${
-                              isCurrentSubsection 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : isSaved 
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'hover:bg-gray-100'
-                            }`}
+                            className={`srs-editor-nav-item ${isCurrentSubsection ? 'current' : ''} ${isSaved ? 'completed' : ''}`}
                             onClick={() => {
                               setCurrentSectionIndex(sectionIndex);
                               setCurrentSubsectionIndex(subsecIndex);
                               setGeneratedContent('');
                             }}
                           >
-                            {isSaved ? '✓ ' : ''}{subsec.subsection_title}
+                            {subsec.subsection_title}
                           </div>
                         );
                       })}
@@ -560,78 +626,89 @@ export default function SRSEditor() {
   // Progress View Step
   if (currentStep === 'progress') {
     return (
-      <div className="container mx-auto p-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">SRS Progress View</h1>
-            <div className="flex gap-2">
+      <div className="srs-editor">
+        <div className="workspace-container">
+          <div className="srs-editor-header">
+            <h1 className="srs-editor-title">SRS Progress View</h1>
+            <div className="srs-editor-actions">
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={() => setCurrentStep('questions')}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               >
-                Continue Questions
+                <span>Continue Questions</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={() => setCurrentStep('review')}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
               >
-                Final Review
+                <span>Final Review</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleExportSRS}
                 disabled={exportLoading || !savedSections.length}
-                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
               >
-                {exportLoading ? 'Exporting...' : 'Export Current SRS'}
+                {exportLoading ? (
+                  <>
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                        <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <span>Export Current SRS</span>
+                )}
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleSaveFinalToSidebar}
                 disabled={!finalSrsContent}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
               >
                 Save to sidebar
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '1.5rem' }}>
             {/* Progress Stats */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Progress Overview</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="srs-editor-card">
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 1rem 0' }}>Progress Overview</h3>
                 
                 {srsStatus && (
                   <>
-                    <div className="mb-4">
-                      <div className="flex justify-between text-sm text-gray-600 mb-2">
+                    <div style={{ marginBottom: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
                         <span>Completion</span>
                         <span>{srsStatus.completionPercentage}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="srs-editor-progress-bar">
                         <div 
-                          className="bg-green-500 h-3 rounded-full transition-all duration-300" 
-                          style={{ width: `${srsStatus.completionPercentage}%` }}
+                          className="srs-editor-progress-fill" 
+                          style={{ width: `${srsStatus.completionPercentage}%`, background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' }}
                         ></div>
                       </div>
                     </div>
                     
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem', color: '#94a3b8' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Completed Sections:</span>
-                        <span className="font-medium">{srsStatus.completedSections}</span>
+                        <span style={{ fontWeight: 500, color: '#f1f5f9' }}>{srsStatus.completedSections}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Total Sections:</span>
-                        <span className="font-medium">{srsStatus.totalSections}</span>
+                        <span style={{ fontWeight: 500, color: '#f1f5f9' }}>{srsStatus.totalSections}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Remaining:</span>
-                        <span className="font-medium">{srsStatus.totalSections - srsStatus.completedSections}</span>
+                        <span style={{ fontWeight: 500, color: '#f1f5f9' }}>{srsStatus.totalSections - srsStatus.completedSections}</span>
                       </div>
                     </div>
 
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-800">
+                    <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '0.5rem' }}>
+                      <p style={{ fontSize: '0.875rem', color: '#93c5fd', margin: 0 }}>
                         {srsStatus.completionPercentage === 100 
                           ? '🎉 SRS Complete! Ready for final review.' 
                           : `📝 ${srsStatus.totalSections - srsStatus.completedSections} sections remaining`}
@@ -642,12 +719,12 @@ export default function SRSEditor() {
               </div>
 
               {/* Section Status */}
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Section Status</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="srs-editor-card">
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 1rem 0' }}>Section Status</h3>
+                <div className="srs-editor-nav-list">
                   {srsStructure.map((section, sectionIndex) => (
-                    <div key={section.section_id} className="border-l-2 border-gray-200 pl-3">
-                      <div className="font-medium text-gray-700 text-sm">{section.section_title}</div>
+                    <div key={section.section_id} className="srs-editor-nav-section">
+                      <div className="srs-editor-nav-section-title">{section.section_title}</div>
                       {section.subsections.map((subsec, subsecIndex) => {
                         const sectionKey = `${section.section_id.replace(/\./g, '_')}_${subsec.subsection_id.replace(/\./g, '_')}`;
                         const isSaved = savedSections.includes(sectionKey);
@@ -656,18 +733,10 @@ export default function SRSEditor() {
                         return (
                           <div
                             key={subsec.subsection_id}
-                            className={`ml-2 p-1 text-xs flex items-center gap-2 ${
-                              isSaved ? 'text-green-600' : 'text-gray-500'
-                            }`}
+                            className={`srs-editor-nav-item ${isCurrentSubsection ? 'current' : ''} ${isSaved ? 'completed' : ''}`}
+                            style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}
                           >
-                            {isSaved ? (
-                              <span className="text-green-500">✓</span>
-                            ) : (
-                              <span className="text-gray-400">○</span>
-                            )}
-                            <span className={isCurrentSubsection ? 'font-medium' : ''}>
-                              {subsec.subsection_title}
-                            </span>
+                            {subsec.subsection_title}
                           </div>
                         );
                       })}
@@ -678,45 +747,58 @@ export default function SRSEditor() {
             </div>
 
             {/* Document Preview */}
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold">Current SRS Document</h3>
-                  <div className="flex gap-2">
+            <div>
+              <div className="srs-editor-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Current SRS Document</h3>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
+                      className="srs-editor-button srs-editor-button-secondary"
                       onClick={() => loadSrsStatus()}
-                      className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      style={{ fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}
                     >
-                      Refresh
+                      <span>Refresh</span>
                     </button>
                     <button
+                      className="srs-editor-button srs-editor-button-primary"
                       onClick={handleExportSRS}
                       disabled={exportLoading || !savedSections.length}
-                      className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+                      style={{ fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}
                     >
-                      {exportLoading ? 'Exporting...' : 'Download DOCX'}
+                      {exportLoading ? (
+                        <>
+                          <svg className="spinner" width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                              <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                            </circle>
+                          </svg>
+                          <span>Exporting...</span>
+                        </>
+                      ) : (
+                        <span>Download DOCX</span>
+                      )}
                     </button>
                   </div>
                 </div>
 
                 {finalSrsContent ? (
-                  <div className="border border-gray-300 rounded-lg">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-300 flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">Document Preview</span>
-                      <span className="text-xs text-gray-500">
+                  <div style={{ border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '0.75rem', overflow: 'hidden' }}>
+                    <div style={{ background: 'rgba(30, 41, 59, 0.4)', padding: '0.75rem 1rem', borderBottom: '1px solid rgba(148, 163, 184, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#cbd5e1' }}>Document Preview</span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                         Last updated: {new Date().toLocaleString()}
                       </span>
                     </div>
-                    <div className="p-6 max-h-[600px] overflow-y-auto bg-white">
-                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    <div style={{ padding: '1.5rem', maxHeight: '600px', overflowY: 'auto', background: 'rgba(30, 41, 59, 0.2)' }}>
+                      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.875rem', lineHeight: '1.6', color: '#e2e8f0', margin: 0 }}>
                         {finalSrsContent}
                       </pre>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading document preview...</p>
+                  <div style={{ textAlign: 'center', padding: '3rem', border: '2px dashed rgba(148, 163, 184, 0.2)', borderRadius: '0.75rem' }}>
+                    <div className="spinner" style={{ width: '2rem', height: '2rem', border: '2px solid rgba(102, 126, 234, 0.3)', borderTopColor: '#667eea', borderRadius: '50%', margin: '0 auto 1rem' }}></div>
+                    <p style={{ color: '#94a3b8' }}>Loading document preview...</p>
                   </div>
                 )}
               </div>
@@ -724,41 +806,52 @@ export default function SRSEditor() {
           </div>
 
           {/* Quick Actions */}
-          <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-            <div className="flex flex-wrap gap-3">
+          <div className="srs-editor-card" style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 1rem 0' }}>Quick Actions</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={() => setCurrentStep('questions')}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               >
-                📝 Continue Editing
+                <span>📝 Continue Editing</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={() => setCurrentStep('review')}
                 disabled={savedSections.length === 0}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
               >
-                👀 Final Review
+                <span>👀 Final Review</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleExportSRS}
                 disabled={exportLoading || !savedSections.length}
-                className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-400"
               >
-                💾 {exportLoading ? 'Exporting...' : 'Export Document'}
+                {exportLoading ? (
+                  <>
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                        <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <span>💾 Export Document</span>
+                )}
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleSaveFinalToSidebar}
                 disabled={!finalSrsContent}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
               >
-                📁 Save to sidebar
+                <span>📁 Save to sidebar</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-secondary"
                 onClick={() => setCurrentStep('description')}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
               >
-                🏠 Start New SRS
+                <span>🏠 Start New SRS</span>
               </button>
             </div>
           </div>
@@ -770,69 +863,80 @@ export default function SRSEditor() {
   // Review Step
   if (currentStep === 'review') {
     return (
-      <div className="container mx-auto p-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">SRS Document Review</h1>
-            <div className="flex gap-2">
+      <div className="srs-editor">
+        <div className="workspace-container">
+          <div className="srs-editor-header">
+            <h1 className="srs-editor-title">SRS Document Review</h1>
+            <div className="srs-editor-actions">
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={() => setCurrentStep('progress')}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               >
-                View Progress
+                <span>View Progress</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-secondary"
                 onClick={() => setCurrentStep('questions')}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
               >
-                Back to Questions
+                <span>Back to Questions</span>
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleExportSRS}
                 disabled={!finalSrsContent || exportLoading}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
               >
-                {exportLoading ? 'Exporting...' : 'Export to DOCX'}
+                {exportLoading ? (
+                  <>
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                        <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <span>Export to DOCX</span>
+                )}
               </button>
               <button
+                className="srs-editor-button srs-editor-button-primary"
                 onClick={handleSaveFinalToSidebar}
                 disabled={!finalSrsContent}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
               >
-                Save to sidebar
+                <span>Save to sidebar</span>
               </button>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold">Complete SRS Document</h2>
-              <p className="text-gray-600">
+          <div className="srs-editor-card">
+            <div style={{ marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#f1f5f9', margin: '0 0 0.5rem 0' }}>Complete SRS Document</h2>
+              <p style={{ fontSize: '0.9375rem', color: '#94a3b8', margin: 0 }}>
                 Review the complete Software Requirements Specification document generated from your inputs.
               </p>
             </div>
 
             {finalSrsContent ? (
-              <div className="border border-gray-300 rounded-lg p-6 max-h-[600px] overflow-y-auto">
-                <pre className="whitespace-pre-wrap font-sans">{finalSrsContent}</pre>
+              <div style={{ border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '0.75rem', padding: '1.5rem', maxHeight: '600px', overflowY: 'auto', background: 'rgba(30, 41, 59, 0.2)' }}>
+                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: '#e2e8f0', lineHeight: '1.6', margin: 0 }}>{finalSrsContent}</pre>
               </div>
             ) : (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p>Generating final SRS document...</p>
+              <div style={{ textAlign: 'center', padding: '3rem' }}>
+                <div className="spinner" style={{ width: '3rem', height: '3rem', border: '2px solid rgba(102, 126, 234, 0.3)', borderTopColor: '#667eea', borderRadius: '50%', margin: '0 auto 1rem' }}></div>
+                <p style={{ color: '#94a3b8' }}>Generating final SRS document...</p>
               </div>
             )}
 
-            <div className="mt-6 flex justify-between">
-              <div className="text-sm text-gray-600">
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid rgba(148, 163, 184, 0.1)' }}>
+              <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
                 Progress: {getProgressPercentage()}% Complete ({savedSections.length} sections saved)
               </div>
               {getProgressPercentage() < 100 && (
                 <button
+                  className="srs-editor-button srs-editor-button-primary"
                   onClick={() => setCurrentStep('questions')}
-                  className="px-4 py-2 bg-blue-500 text-white rounded"
                 >
-                  Continue Adding Sections
+                  <span>Continue Adding Sections</span>
                 </button>
               )}
             </div>

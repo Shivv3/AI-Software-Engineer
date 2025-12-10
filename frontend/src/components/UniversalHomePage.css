@@ -1,0 +1,429 @@
+/* Universal Homepage - Dark Theme */
+
+.universal-homepage {
+  position: relative;
+  z-index: 1;
+  padding: 2.5rem 0 3rem 0;
+  animation: fadeInUp 0.6s ease-out;
+  min-height: calc(100vh - 5rem);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.workspace-not-found {
+  position: relative;
+  z-index: 1;
+}
+
+/* Header */
+.homepage-header {
+  margin-bottom: 2.5rem;
+}
+
+.homepage-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.homepage-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.homepage-back-button:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  transform: translateX(-2px);
+}
+
+.homepage-project-info {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.homepage-project-info strong {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.homepage-badge-wrapper {
+  margin-bottom: 1rem;
+}
+
+.homepage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 50px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #a5b4fc;
+  backdrop-filter: blur(10px);
+}
+
+.badge-icon {
+  font-size: 1rem;
+}
+
+.homepage-title {
+  font-size: 3rem;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.homepage-subtitle {
+  font-size: 1.125rem;
+  color: #94a3b8;
+  max-width: 640px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Phases Grid */
+.phases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 4.5rem;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  grid-auto-rows: min-content;
+}
+
+/* Phase Cards */
+.phase-card {
+  position: relative;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  animation: fadeInUp 0.6s ease-out both;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+.phase-card:nth-child(1) { animation-delay: 0.1s; }
+.phase-card:nth-child(2) { animation-delay: 0.2s; }
+.phase-card:nth-child(3) { animation-delay: 0.3s; }
+.phase-card:nth-child(4) { animation-delay: 0.4s; }
+
+.phase-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 1.5rem 1.5rem 0 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.phase-card.phase-requirements::before {
+  background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+}
+
+.phase-card.phase-design::before {
+  background: linear-gradient(90deg, #10b981 0%, #14b8a6 100%);
+}
+
+.phase-card.phase-implementation::before {
+  background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
+}
+
+.phase-card.phase-testing::before {
+  background: linear-gradient(90deg, #ef4444 0%, #f97373 100%);
+}
+
+.phase-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.phase-card:hover::before {
+  opacity: 1;
+}
+
+.phase-card-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.phase-card.phase-requirements:hover .phase-card-glow {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+  opacity: 1;
+}
+
+.phase-card.phase-design:hover .phase-card-glow {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+  opacity: 1;
+}
+
+.phase-card.phase-implementation:hover .phase-card-glow {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%);
+  opacity: 1;
+}
+
+.phase-card.phase-testing:hover .phase-card-glow {
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.1) 0%, transparent 70%);
+  opacity: 1;
+}
+
+.phase-card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+}
+
+.phase-badge-wrapper {
+  margin-bottom: 1rem;
+}
+
+.phase-badge {
+  display: inline-block;
+  padding: 0.375rem 0.875rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.phase-badge-requirements {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.phase-badge-design {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.phase-badge-implementation {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.phase-badge-testing {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.phase-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0 0 0.5rem 0;
+}
+
+.phase-description {
+  font-size: 0.9375rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+  flex: 1;
+  min-height: 4.5rem;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.phase-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 0.75rem;
+  color: #a5b4fc;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.phase-action-button:hover:not(.disabled) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+  transform: translateX(4px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.phase-action-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #64748b;
+}
+
+/* Footer */
+.homepage-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 1rem;
+  font-size: 0.9375rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-top: 3rem;
+  clear: both;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.footer-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.homepage-footer strong {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (min-width: 1201px) {
+  .phases-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1400px) and (min-width: 901px) {
+  .phases-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 1024px) {
+  .phases-grid {
+    gap: 1.25rem;
+    margin-bottom: 3.5rem;
+  }
+  
+  .phase-card {
+    min-height: 300px;
+  }
+  
+  .homepage-footer {
+    margin-top: 2.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .phases-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+  
+  .phase-card {
+    min-height: 280px;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .homepage-title {
+    font-size: 2rem;
+  }
+
+  .homepage-subtitle {
+    font-size: 1rem;
+  }
+
+  .phases-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-bottom: 3rem;
+  }
+
+  .phase-card {
+    padding: 1.5rem;
+    min-height: auto;
+  }
+
+  .homepage-footer {
+    margin-top: 2rem;
+    padding: 1.25rem;
+  }
+}
+
+/* Handle zoom levels */
+@media (max-width: 100%) {
+  .phases-grid {
+    gap: 1.5rem;
+  }
+  
+  .homepage-footer {
+    margin-top: 3rem;
+  }
+}
+

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useProjectContext } from './ProjectContext';
+import './SystemDesignWizard.css';
 
 export default function SystemDesignWizard() {
   const navigate = useNavigate();
@@ -203,60 +204,48 @@ export default function SystemDesignWizard() {
   const mermaidBlock = extractMermaid();
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background:
-          'radial-gradient(circle at top left, #e0f2fe 0, transparent 55%), radial-gradient(circle at bottom right, #ede9fe 0, transparent 55%), #f9fafb',
-      }}
-    >
-      <div className="container" style={{ paddingTop: '2.5rem', paddingBottom: '2.5rem' }}>
+    <div className="system-design-wizard">
+      <div className="workspace-container">
         {/* Header */}
-        <header className="mb-8">
-          <div className="mb-2">
-            <button className="btn btn-secondary" onClick={() => navigate(`/projects/${projectId}/design`)}>
-              ← Back to Design Studio
-            </button>
-          </div>
-          <div className="mb-2">
-            <span className="badge badge-blue">System Design &amp; Tech Stack Suggestion</span>
-          </div>
-          <h1
-            className="text-2xl font-bold"
-            style={{ fontSize: '2rem', marginBottom: '0.75rem' }}
-          >
-            Consultation Wizard
-          </h1>
-          <p className="text-gray-600" style={{ maxWidth: '640px' }}>
+        <header className="system-design-header">
+          <button className="system-design-back-button" onClick={() => navigate(`/projects/${projectId}/design`)}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Back to Design Studio</span>
+          </button>
+          <div className="system-design-badge">System Design &amp; Tech Stack Suggestion</div>
+          <h1 className="system-design-title">Consultation Wizard</h1>
+          <p className="system-design-subtitle">
             Answer a few high‑level questions about your environment and priorities. Any documents you
             marked as "Use in context" in the sidebar will automatically feed the AI (no need to paste SRS).
           </p>
           {contextDocs.length > 0 && (
-            <p className="text-sm text-green-700 mt-2">
+            <p className="system-design-context-info success">
               Using {contextDocs.length} document(s) marked "Use in context" from the project sidebar.
             </p>
           )}
           {contextDocs.length === 0 && (
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="system-design-context-info info">
               No context selected yet. Open the sidebar and toggle "Use in context" on an SRS or other doc.
             </p>
           )}
         </header>
 
-        <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '1.5rem' }}>
+        <div className="system-design-grid">
           {/* Left: Form */}
-          <section className="card">
-            <h2 className="text-xl font-semibold mb-2">Context Injection</h2>
-            <p className="text-sm text-gray-600 mb-4">
+          <section className="system-design-form-card">
+            <h2 className="system-design-form-title">Context Injection</h2>
+            <p className="system-design-form-description">
               You can describe your existing environment and constraints, or leave it blank for a{' '}
               <strong>Greenfield / best‑practice</strong> recommendation.
             </p>
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="text-sm font-medium mb-1">Cloud / Infrastructure Preference</label>
+            <form className="system-design-form" onSubmit={handleSubmit}>
+              <div className="system-design-form-group">
+                <label className="system-design-label">Cloud / Infrastructure Preference</label>
                 <input
-                  className="input"
+                  className="system-design-input"
                   type="text"
                   name="cloudPreference"
                   placeholder="e.g., AWS, Azure, GCP, On‑prem, No preference"
@@ -265,10 +254,10 @@ export default function SystemDesignWizard() {
                 />
               </div>
 
-              <div className="mb-4">
-                <label className="text-sm font-medium mb-1">Legacy Systems / Tech to Integrate</label>
+              <div className="system-design-form-group">
+                <label className="system-design-label">Legacy Systems / Tech to Integrate</label>
                 <input
-                  className="input"
+                  className="system-design-input"
                   type="text"
                   name="legacyTech"
                   placeholder="e.g., Existing .NET APIs, PHP monolith, Oracle DB"
@@ -277,10 +266,10 @@ export default function SystemDesignWizard() {
                 />
               </div>
 
-              <div className="mb-4">
-                <label className="text-sm font-medium mb-1">Team Skills</label>
+              <div className="system-design-form-group">
+                <label className="system-design-label">Team Skills</label>
                 <input
-                  className="input"
+                  className="system-design-input"
                   type="text"
                   name="teamSkills"
                   placeholder="e.g., Strong in JavaScript/TypeScript, some Python, no Go"
@@ -289,10 +278,10 @@ export default function SystemDesignWizard() {
                 />
               </div>
 
-              <div className="mb-4">
-                <label className="text-sm font-medium mb-1">Business Priorities</label>
+              <div className="system-design-form-group">
+                <label className="system-design-label">Business Priorities</label>
                 <input
-                  className="input"
+                  className="system-design-input"
                   type="text"
                   name="priorities"
                   placeholder="e.g., Speed‑to‑market over scalability, low cost, strict compliance"
@@ -301,93 +290,97 @@ export default function SystemDesignWizard() {
                 />
               </div>
 
-              <div className="mb-4">
-                <label className="text-sm">
+              <div className="system-design-form-group">
+                <div className="system-design-checkbox-group">
                   <input
                     type="checkbox"
                     name="isGreenfield"
                     checked={form.isGreenfield}
                     onChange={handleChange}
-                    style={{ marginRight: '0.5rem' }}
+                    className="system-design-checkbox"
                   />
-                  Treat this as a <strong>Greenfield</strong> project (ignore most legacy constraints and
-                  aim for best‑practice recommendations).
-                </label>
+                  <label className="system-design-checkbox-label">
+                    Treat this as a <strong>Greenfield</strong> project (ignore most legacy constraints and
+                    aim for best‑practice recommendations).
+                  </label>
+                </div>
               </div>
 
               {processingStatus && (
-                <p className="text-sm" style={{ color: '#059669', marginBottom: '0.75rem' }}>
+                <p className="system-design-status processing">
                   {processingStatus}
                 </p>
               )}
 
               {error && (
-                <p className="text-sm" style={{ color: '#b91c1c', marginBottom: '0.75rem' }}>
+                <p className="system-design-status error">
                   {error}
                 </p>
               )}
 
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="system-design-submit-button"
                 disabled={loading}
-                style={{ width: '100%' }}
               >
-                {loading ? (processingStatus || 'Generating System Design...') : 'Generate System Design'}
+                {loading ? (
+                  <>
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="43.98" strokeDashoffset="10.99">
+                        <animate attributeName="stroke-dashoffset" values="43.98;0;43.98" dur="1.5s" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    <span>{processingStatus || 'Generating System Design...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Generate System Design</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </>
+                )}
               </button>
             </form>
           </section>
 
           {/* Right: Output */}
-          <section className="card" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 className="text-xl font-semibold mb-0">Design Document</h2>
+          <section className="system-design-output-card">
+            <div className="system-design-output-header">
+              <h2 className="system-design-output-title">Design Document</h2>
               <button
-                className="btn btn-secondary"
+                className="system-design-download-button"
                 onClick={handleDownload}
                 disabled={!designMarkdown}
               >
-                Download DOCX
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 11L3 6H6V1H10V6H13L8 11Z" fill="currentColor"/>
+                  <path d="M2 13H14V15H2V13Z" fill="currentColor"/>
+                </svg>
+                <span>Download DOCX</span>
               </button>
             </div>
 
             {!designMarkdown && (
-              <p className="text-sm text-gray-600">
+              <p className="system-design-output-placeholder">
                 Once generated, your architecture strategy, tech stack recommendations, and Mermaid
                 diagram will appear here.
               </p>
             )}
 
             {designMarkdown && (
-              <div style={{ overflowY: 'auto', flex: 1, borderTop: '1px solid #e5e7eb', paddingTop: '0.75rem' }}>
-                <pre
-                  style={{
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                    fontSize: '0.85rem',
-                  }}
-                >
+              <div className="system-design-output-content">
+                <pre className="system-design-output-pre">
                   {designMarkdown}
                 </pre>
 
                 {mermaidBlock && (
-                  <div className="mt-4">
-                    <h3 className="text-lg font-semibold mb-1">Architecture Diagram (Mermaid)</h3>
-                    <p className="text-sm text-gray-600 mb-2">
+                  <div className="system-design-mermaid-section">
+                    <h3 className="system-design-mermaid-title">Architecture Diagram (Mermaid)</h3>
+                    <p className="system-design-mermaid-description">
                       This is a Mermaid diagram definition you can render in tools that support Mermaid.
                     </p>
-                    <pre
-                      style={{
-                        whiteSpace: 'pre-wrap',
-                        backgroundColor: '#0f172a',
-                        color: '#e5e7eb',
-                        padding: '0.75rem',
-                        borderRadius: '0.5rem',
-                        fontFamily:
-                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                        fontSize: '0.8rem',
-                      }}
-                    >
+                    <pre className="system-design-mermaid-pre">
                       {mermaidBlock}
                     </pre>
                   </div>

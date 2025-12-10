@@ -32,14 +32,15 @@ const rateLimiter = new RateLimiter(30, 60 * 1000);
 
 class LLMService {
     constructor() {
-        if (!process.env.GEMINI_API_KEY) {
-            throw new Error('GEMINI_API_KEY environment variable is not set');
-        }
+        // Defer hard failure until generate() so the server can start and surface a friendly error.
         this.apiKey = process.env.GEMINI_API_KEY;
     }
 
     async generate(prompt) {
         try {
+            if (!this.apiKey) {
+                throw new Error('GEMINI_API_KEY environment variable is not set');
+            }
             await rateLimiter.tryAcquire();
             
             console.log('Making request with prompt:', prompt);

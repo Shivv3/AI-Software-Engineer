@@ -53,6 +53,23 @@ function extractJson(rawText = '') {
   return rawText.trim();
 }
 
+// Parse JSON from LLM output safely
+function parseLLMJson(rawText) {
+  const extracted = extractJson(rawText);
+  return JSON.parse(extracted);
+}
+
+// Normalize optional context input for prompts
+function formatContextBlock(context) {
+  if (!context) return '(none provided)';
+  if (typeof context === 'string') return context;
+  try {
+    return JSON.stringify(context, null, 2);
+  } catch {
+    return String(context);
+  }
+}
+
 // Enable CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -299,6 +316,193 @@ app.post('/api/design/system', async (req, res) => {
     // Preserve the original error message from LLM service
     const errorMessage = error.message || 'Failed to generate system design';
     res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Generate code from natural language description
+app.post('/api/code/generate', async (req, res) => {
+  try {
+    const { description, target_language, style, context, include_tests } = req.body || {};
+
+    if (!description || !target_language) {
+      return res.status(400).json({ error: 'description and target_language are required' });
+    }
+
+    const promptTemplate = await loadPrompt('code_generate_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<TARGET_LANGUAGE>>>', target_language)
+      .replace('<<<DESCRIPTION>>>', description)
+      .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context))
+      .replace('<<<STYLE>>>', style || 'none provided')
+      .replace('<<<INCLUDE_TESTS>>>', include_tests ? 'yes' : 'no');
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = parseLLMJson(rawResponse);
+
+    if (!parsed || typeof parsed !== 'object' || !parsed.code) {
+      throw new Error('LLM did not return code');
+    }
+
+    await logInteraction(
+      req.params.id || 'code_generate',
+      '/api/code/generate',
+      prompt.substring(0, 1000) + '...',
+      rawResponse.substring(0, 2000),
+      parsed
+    );
+
+    res.json({
+      language: parsed.language || target_language,
+      filename_suggestion: parsed.filename_suggestion || null,
+      code: parsed.code,
+      summary: parsed.summary || '',
+      run_steps: parsed.run_steps || '',
+      tests_or_usage: parsed.tests_or_usage || null,
+      assumptions: parsed.assumptions || null,
+      warnings: parsed.warnings || null
+    });
+  } catch (error) {
+    console.error('Code generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate code' });
+  }
+});
+
+// Translate source code between languages
+app.post('/api/code/translate', async (req, res) => {
+  try {
+    const { source_language, target_language, source_code, instructions, context } = req.body || {};
+
+    if (!source_language || !target_language || !source_code) {
+      return res.status(400).json({ error: 'source_language, target_language, and source_code are required' });
+    }
+
+    const promptTemplate = await loadPrompt('code_translate_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<SOURCE_LANGUAGE>>>', source_language)
+      .replace('<<<TARGET_LANGUAGE>>>', target_language)
+      .replace('<<<SOURCE_CODE>>>', source_code)
+      .replace('<<<INSTRUCTIONS>>>', instructions || 'none')
+      .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context));
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = parseLLMJson(rawResponse);
+
+    if (!parsed || typeof parsed !== 'object' || !parsed.code) {
+      throw new Error('LLM did not return translated code');
+    }
+
+    await logInteraction(
+      req.params.id || 'code_translate',
+      '/api/code/translate',
+      prompt.substring(0, 1000) + '...',
+      rawResponse.substring(0, 2000),
+      parsed
+    );
+
+    res.json({
+      target_language: parsed.target_language || target_language,
+      code: parsed.code,
+      summary: parsed.summary || '',
+      notes: parsed.notes || null,
+      assumptions: parsed.assumptions || null,
+      warnings: parsed.warnings || null
+    });
+  } catch (error) {
+    console.error('Code translation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to translate code' });
+  }
+});
+
+// Automated test generation and virtual execution summary
+app.post('/api/code/test', async (req, res) => {
+  try {
+    const { language, code, instructions, context, want_fix } = req.body || {};
+
+    if (!code) {
+      return res.status(400).json({ error: 'code is required' });
+    }
+
+    const promptTemplate = await loadPrompt('code_test_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<LANGUAGE>>>', language || 'unspecified')
+      .replace('<<<CODE>>>', code)
+      .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context))
+      .replace('<<<INSTRUCTIONS>>>', instructions || 'comprehensive testing with all quality metrics and scalability tests')
+      .replace('<<<WANT_FIX>>>', want_fix ? 'yes' : 'no');
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = parseLLMJson(rawResponse);
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tests)) {
+      throw new Error('LLM did not return a valid test report');
+    }
+
+    await logInteraction(
+      req.params.id || 'code_test',
+      '/api/code/test',
+      prompt.substring(0, 1000) + '...',
+      rawResponse.substring(0, 2000),
+      parsed
+    );
+
+    res.json({
+      summary: parsed.summary || '',
+      overall_verdict: parsed.overall_verdict || 'mixed',
+      overall_score: parsed.overall_score || 0,
+      tests: parsed.tests || [],
+      metrics: parsed.metrics || {},
+      failures_summary: parsed.failures_summary || '',
+      critical_issues: parsed.critical_issues || [],
+      recommendations: parsed.recommendations || [],
+      improved_code: want_fix ? parsed.improved_code || null : null,
+    });
+  } catch (error) {
+    console.error('Code test error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate and run tests' });
+  }
+});
+
+// Automated static code review
+app.post('/api/code/review', async (req, res) => {
+  try {
+    const { language, code, context, focus } = req.body || {};
+
+    if (!code) {
+      return res.status(400).json({ error: 'code is required' });
+    }
+
+    const promptTemplate = await loadPrompt('code_review_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<LANGUAGE>>>', language || 'unspecified')
+      .replace('<<<CODE>>>', code)
+      .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context))
+      .replace('<<<FOCUS>>>', focus || 'general best practices');
+
+    const rawResponse = await callLLM(prompt);
+    const parsed = parseLLMJson(rawResponse);
+
+    if (!parsed || typeof parsed !== 'object' || !parsed.summary || !Array.isArray(parsed.findings)) {
+      throw new Error('LLM did not return a valid review document');
+    }
+
+    await logInteraction(
+      req.params.id || 'code_review',
+      '/api/code/review',
+      prompt.substring(0, 1000) + '...',
+      rawResponse.substring(0, 2000),
+      parsed
+    );
+
+    res.json({
+      summary: parsed.summary,
+      overall_score: parsed.overall_score,
+      positives: parsed.positives || [],
+      findings: parsed.findings || [],
+      recommendations_summary: parsed.recommendations_summary || '',
+    });
+  } catch (error) {
+    console.error('Code review error:', error);
+    res.status(500).json({ error: error.message || 'Failed to review code' });
   }
 });
 

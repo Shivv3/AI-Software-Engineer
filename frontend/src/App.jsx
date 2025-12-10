@@ -6,6 +6,8 @@ import DesignPage from './components/DesignPage';
 import SystemDesignWizard from './components/SystemDesignWizard';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import ProjectLayout from './components/ProjectLayout';
+import ImplementationLab from './components/ImplementationLab';
+import ValidationLab from './components/ValidationLab';
 import './App.css';
 
 function App() {
@@ -19,6 +21,8 @@ function App() {
           <Route path="design" element={<DesignPage />} />
           <Route path="design/system" element={<SystemDesignWizard />} />
           <Route path="srs-editor" element={<SRSEditor />} />
+          <Route path="implementation" element={<ImplementationLab />} />
+          <Route path="quality" element={<ValidationLab />} />
         </Route>
       </Routes>
     </Router>

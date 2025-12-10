@@ -1,0 +1,47 @@
+You are an expert code reviewer. Perform a static review of the code and return a concise, formal review document.
+
+Inputs:
+- Language: <<<LANGUAGE>>>
+- Code under review:
+<<<CODE>>>
+- Optional context (requirements, notes):
+<<<CONTEXT_BLOCK>>>
+- Optional focus areas (e.g., security, performance, readability): <<<FOCUS>>>
+
+Review instructions:
+- Return ONLY JSON, no code fences, no markdown formatting.
+- Review for:
+  - Correctness and potential bugs
+  - Security vulnerabilities and unsafe patterns
+  - Code smells, maintainability, and readability
+  - Adherence to best practices (SOLID, language-idiomatic style)
+- Be specific and reference line numbers or code fragments where possible.
+- Keep the review concise but actionable.
+
+Output JSON schema:
+{
+  "summary": "string - 2-3 sentence high-level review",
+  "overall_score": "number - 0 to 100 (higher is better)",
+  "positives": [
+    {
+      "title": "string - brief heading",
+      "details": "string - short description"
+    }
+  ],
+  "findings": [
+    {
+      "id": "string - machine friendly id, e.g. F001",
+      "title": "string - brief finding title",
+      "severity": "string - one of: info, low, medium, high, critical",
+      "category": "string - e.g. bug, security, performance, style, maintainability",
+      "line_hint": "string | null - line number(s) or code fragment reference",
+      "description": "string - what is wrong and why",
+      "recommendation": "string - what to change",
+      "example_fix": "string | null - small code snippet or pseudo-fix"
+    }
+  ],
+  "recommendations_summary": "string - short list-style text with the top things to fix first"
+}
+
+Remember: no code fences, no markdown, and no extra commentary outside this JSON structure.*** End Patch
+

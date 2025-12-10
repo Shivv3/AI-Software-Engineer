@@ -319,6 +319,51 @@ app.post('/api/design/system', async (req, res) => {
   }
 });
 
+// Generate database schema (SQL or NoSQL) from requirements/user stories
+app.post('/api/design/schema', async (req, res) => {
+  try {
+    const { requirements_text, output_format = 'auto', context_text } = req.body || {};
+
+    if (!requirements_text || typeof requirements_text !== 'string') {
+      return res.status(400).json({ error: 'requirements_text is required and must be a string' });
+    }
+
+    if (requirements_text.startsWith('data:')) {
+      return res.status(400).json({ error: 'Send extracted text, not raw file data. Please extract text first.' });
+    }
+
+    const promptTemplate = await loadPrompt('database_schema_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<OUTPUT_FORMAT>>>', output_format || 'auto')
+      .replace('<<<REQUIREMENTS_TEXT>>>', requirements_text)
+      .replace('<<<CONTEXT_TEXT>>>', formatContextBlock(context_text || '(none provided)'));
+
+    console.log(`Calling LLM for schema design. Input length: ${requirements_text.length} chars`);
+    const rawResponse = await callLLM(prompt);
+
+    let parsed;
+    try {
+      parsed = parseLLMJson(rawResponse);
+    } catch (parseError) {
+      console.warn('Schema response was not valid JSON, returning raw text. Error:', parseError.message);
+      parsed = { schema_text: rawResponse };
+    }
+
+    await logInteraction(
+      req.params.id || 'design_schema',
+      '/api/design/schema',
+      prompt.substring(0, 1000) + '...',
+      rawResponse.substring(0, 2000),
+      parsed
+    );
+
+    res.json(parsed);
+  } catch (error) {
+    console.error('Database schema generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate database schema' });
+  }
+});
+
 // Generate code from natural language description
 app.post('/api/code/generate', async (req, res) => {
   try {

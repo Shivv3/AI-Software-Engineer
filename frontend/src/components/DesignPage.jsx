@@ -56,12 +56,18 @@ export default function DesignPage() {
             <div className="design-feature-badge design-feature-badge-yellow">B. Data Design</div>
             <h2 className="design-feature-title">Database Schema Generator</h2>
             <p className="design-feature-description">
-              This tool will analyse entities, relationships, and constraints implied by your SRS
-              to propose an initial database schema, complete with tables, keys, and notes on
-              normalization and performance trade‑offs.
+              Generate a first-pass schema from your data models or user stories. It will map
+              entities, relationships, and constraints into SQL DDL or a NoSQL JSON structure,
+              plus rationale and trade‑offs you can refine.
             </p>
-            <button className="design-feature-button" disabled>
-              Coming Soon
+            <button
+              className="design-feature-button"
+              onClick={() => navigate(`/projects/${projectId}/design/schema`)}
+            >
+              <span>Open Schema Generator</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </button>
           </section>
         </main>

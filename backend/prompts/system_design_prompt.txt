@@ -32,37 +32,44 @@ Task:
 - Architectural notes (sync vs async APIs, API style, key modules/services).
 - Justification and alternatives.
 
-### 2.3 Data & Storage
-- Recommended primary database(s) (e.g., PostgreSQL, MySQL, MongoDB, Redis, etc.).
-- Data modeling notes (OLTP vs analytics, need for search, caching, etc.).
-- Justification and alternatives if constraints suggest other choices.
+Return ONLY JSON (no markdown, no code fences) with this shape:
+{
+  "high_level_design": {
+    "summary": "2-4 sentences describing the architecture vision",
+    "key_components": ["ordered bullets for major components/services/modules"],
+    "data_flow": ["ordered bullets for main flows and interactions"],
+    "integration_points": ["ordered bullets for external/internal integrations"]
+  },
+  "tech_stack": {
+    "frontend": ["frameworks/libs with brief rationale"],
+    "backend": ["frameworks/libs/runtime with rationale"],
+    "data": ["datastores, caches, search with rationale"],
+    "infrastructure": ["hosting/orchestration/CDN/queues/etc with rationale"],
+    "observability": ["logging/metrics/tracing/error monitoring tools"],
+    "reasoning": "short paragraph on why this stack fits the constraints",
+    "alternatives": ["ordered bullets of 2-3 notable alternatives with when-to-prefer"]
+  },
+  "implementation_architecture": {
+    "style": "e.g., modular monolith, microservices, service-with-plugins",
+    "services": ["ordered bullets of key services/modules and their responsibilities"],
+    "api_strategy": "REST/GraphQL/gRPC/messaging, sync vs async notes",
+    "data_strategy": "schema/consistency/transactions/partitioning/caching notes",
+    "scalability": "how to scale and evolve (phased growth)",
+    "security": "authn/z, secrets, PII, compliance highlights",
+    "tradeoffs": ["ordered bullets of key trade-offs with rationale"]
+  },
+  "assumptions": ["ordered bullets of explicit assumptions"],
+  "next_steps": ["ordered bullets of immediate next steps for the team"]
+}
 
-### 2.4 DevOps & Infrastructure
-- Recommended deployment model (containers/VMs/serverless), orchestration (Docker Compose, Kubernetes, etc.).
-- CI/CD approach, environments, observability basics.
-- Security & compliance considerations tied to the SRS NFRs.
+Instructions:
+- Be concise and production-oriented; keep bullets short.
+- Ground recommendations in the provided SRS/constraints/environment; call out fit-for-purpose.
+- If constraints are missing, state assumptions clearly in "assumptions".
+- Do NOT include mermaid or diagrams.
 
-## 3. Design Considerations & Trade‑offs
-- Key trade‑offs (simplicity vs scalability, speed‑to‑market vs robustness, vendor lock‑in, etc.).
-- How this design can evolve over time (e.g., from monolith to microservices).
-
-## 4. Architecture Diagram (Mermaid)
-- Provide a Mermaid diagram that visualizes the high‑level architecture.
-- Use a simple, readable diagram type such as flowchart or C4‑style components.
-- The diagram MUST be returned in a fenced code block like:
-```mermaid
-flowchart LR
-  ...
-```
-
-Output format:
-- Return ONLY Markdown text that follows the structure above.
-- The Mermaid diagram MUST be in a ```mermaid fenced code block so it can be rendered later.
-
-SRS CONTENT:
+Inputs:
+- SRS or design content:
 <<<SRS_CONTENT>>>
-
-CONSULTATION CONTEXT (JSON):
+- Consultation context (JSON):
 <<<CONTEXT_JSON>>>
-
-

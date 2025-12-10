@@ -53,10 +53,21 @@ function extractJson(rawText = '') {
   return rawText.trim();
 }
 
-// Parse JSON from LLM output safely
+// Parse JSON from LLM output with a light repair pass for stray backslashes
 function parseLLMJson(rawText) {
   const extracted = extractJson(rawText);
-  return JSON.parse(extracted);
+  try {
+    return JSON.parse(extracted);
+  } catch (err) {
+    // Attempt a minimal repair: escape lone backslashes not followed by valid escape chars
+    try {
+      const repaired = extracted.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+      return JSON.parse(repaired);
+    } catch (err2) {
+      // Bubble the original error for clearer debugging
+      throw err;
+    }
+  }
 }
 
 // Normalize optional context input for prompts
@@ -302,15 +313,26 @@ app.post('/api/design/system', async (req, res) => {
     console.log(`Calling LLM for system design with SRS length: ${srs_text.length} chars`);
     const rawResponse = await callLLM(prompt);
 
+    let parsed;
+    try {
+      parsed = parseLLMJson(rawResponse);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('LLM did not return JSON');
+      }
+    } catch (parseErr) {
+      console.warn('Design response was not valid JSON, returning raw text. Error:', parseErr.message);
+      parsed = { design_text: rawResponse };
+    }
+
     await logInteraction(
       req.params.id || 'design_anonymous',
       '/api/design/system',
       prompt.substring(0, 1000) + '...', // Truncate for logging
       rawResponse.substring(0, 1000) + '...', // Truncate for logging
-      { design_markdown: rawResponse.substring(0, 100) + '...' }
+      parsed
     );
 
-    res.json({ design_markdown: rawResponse });
+    res.json(parsed);
   } catch (error) {
     console.error('System design generation error:', error);
     // Preserve the original error message from LLM service

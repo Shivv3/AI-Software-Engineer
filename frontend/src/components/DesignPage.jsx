@@ -70,6 +70,25 @@ export default function DesignPage() {
               </svg>
             </button>
           </section>
+
+          <section className="design-feature-card">
+            <div className="design-feature-badge design-feature-badge-purple">C. Visual Design</div>
+            <h2 className="design-feature-title">Automated System Diagram Generator</h2>
+            <p className="design-feature-description">
+              Generate visual diagrams automatically from your project documentation. Create sequence diagrams,
+              ER diagrams, data flow diagrams, use case diagrams, and high-level architecture diagrams using
+              AI-powered analysis of your SRS, design documents, and project context.
+            </p>
+            <button
+              className="design-feature-button"
+              onClick={() => navigate(`/projects/${projectId}/design/diagram`)}
+            >
+              <span>Open Diagram Generator</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </section>
         </main>
       </div>
     </div>

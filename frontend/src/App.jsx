@@ -5,6 +5,7 @@ import SRSEditor from './components/SRSEditor';
 import DesignPage from './components/DesignPage';
 import SystemDesignWizard from './components/SystemDesignWizard';
 import DatabaseSchemaGenerator from './components/DatabaseSchemaGenerator';
+import DiagramGenerator from './components/DiagramGenerator';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import ProjectLayout from './components/ProjectLayout';
 import ImplementationLab from './components/ImplementationLab';
@@ -22,6 +23,7 @@ function App() {
           <Route path="design" element={<DesignPage />} />
           <Route path="design/system" element={<SystemDesignWizard />} />
           <Route path="design/schema" element={<DatabaseSchemaGenerator />} />
+          <Route path="design/diagram" element={<DiagramGenerator />} />
           <Route path="srs-editor" element={<SRSEditor />} />
           <Route path="implementation" element={<ImplementationLab />} />
           <Route path="quality" element={<ValidationLab />} />

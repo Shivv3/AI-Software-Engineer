@@ -1360,6 +1360,80 @@ app.post('/api/design/diagram', async (req, res) => {
       throw new Error('LLM did not return valid Mermaid code');
     }
 
+    // Normalize whitespace: replace non-breaking spaces with normal spaces
+    mermaidCode = mermaidCode.replace(/\u00a0/g, ' ');
+
+    const normalizeGraphEdges = (code) => {
+      const lines = code.split('\n');
+      const normalized = [];
+
+      const normalizeEdgeLine = (line) => {
+        const indentMatch = line.match(/^(\s*)/);
+        const indent = indentMatch ? indentMatch[1] : '';
+        if (!line.includes('-->')) {
+          return [line];
+        }
+
+        const parts = line.split('-->');
+        if (parts.length < 2) return [line];
+
+        const lhsRaw = parts[0].replace(/%%.*/, '').trim();
+        const rhsFull = parts.slice(1).join('-->').trim(); // in case arrow appears inside labels
+
+        if (!lhsRaw || !rhsFull) return [line];
+
+        // Extract label and target
+        let label = '';
+        let targetRaw = rhsFull;
+        const labelMatch = rhsFull.match(/^\|\s*([^|]+?)\s*\|\s*(.+)$/);
+        if (labelMatch) {
+          label = labelMatch[1].trim();
+          targetRaw = labelMatch[2].trim();
+        } else {
+          // try form with quoted label in the middle A -- "L" --> B already handled upstream; here only plain --> target
+          const plainMatch = rhsFull.match(/^([^\s]+)(.*)$/);
+          if (plainMatch) {
+            targetRaw = plainMatch[1].trim();
+            // ignore trailing comment
+          }
+        }
+
+        const sources = lhsRaw.split('&').map((s) => s.trim()).filter(Boolean);
+        const targets = targetRaw.split('&').map((t) => t.trim()).filter(Boolean);
+        if (!sources.length || !targets.length) return [line];
+
+        const labelSegment = label ? `|${label}|` : '';
+        const expanded = [];
+        sources.forEach((s) => {
+          targets.forEach((t) => {
+            expanded.push(`${indent}${s} -->${labelSegment} ${t}`);
+          });
+        });
+        return expanded;
+      };
+
+      lines.forEach((line) => {
+        normalizeEdgeLine(line).forEach((l) => normalized.push(l));
+      });
+      return normalized.join('\n');
+    };
+
+    // For non-ER diagrams, normalize sequence-style colon labels to pipe labels and expand ampersand edges
+    if (diagram_type !== 'er') {
+      // Convert "A --> B: Label" to "A -->|Label| B"
+      mermaidCode = mermaidCode.replace(
+        /([A-Za-z0-9_]+)\s*-->\s*([A-Za-z0-9_]+)\s*:\s*([^\n]+)/g,
+        (_m, a, b, label) => `${a} -->|${label.trim()}| ${b}`
+      );
+      // Convert "A -- Label --> B" to pipe form for consistency
+      mermaidCode = mermaidCode.replace(
+        /([A-Za-z0-9_]+)\s*--\s*([^>\n]+?)\s*-->\s*([A-Za-z0-9_]+)/g,
+        (_m, a, label, b) => `${a} -->|${label.trim()}| ${b}`
+      );
+      // Expand edges that incorrectly use '&' to represent multiple sources/targets
+      mermaidCode = normalizeGraphEdges(mermaidCode);
+    }
+
     // Normalize Mermaid code for ER diagrams: convert SQL types to Mermaid-compatible types
     if (diagram_type === 'er') {
       // Convert SQL data types to Mermaid-compatible types
@@ -1412,6 +1486,12 @@ app.post('/api/design/diagram', async (req, res) => {
       
       const page = await browser.newPage();
       
+      // Escape HTML-sensitive characters in Mermaid code
+      const escapedMermaid = mermaidCode
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
       // Create HTML with Mermaid
       const html = `
         <!DOCTYPE html>
@@ -1425,7 +1505,7 @@ app.post('/api/design/diagram', async (req, res) => {
         </head>
         <body>
           <div class="mermaid">
-            ${mermaidCode}
+            ${escapedMermaid}
           </div>
           <script>
             mermaid.initialize({ startOnLoad: true, theme: 'default' });

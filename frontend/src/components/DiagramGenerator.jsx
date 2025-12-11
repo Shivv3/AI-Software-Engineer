@@ -10,9 +10,7 @@ export default function DiagramGenerator() {
 
   const API_BASE = import.meta.env.VITE_API_BASE || '/api';
   const [diagramType, setDiagramType] = useState('');
-  const [inputMethod, setInputMethod] = useState('text'); // 'text' or 'file'
   const [projectInfo, setProjectInfo] = useState('');
-  const [selectedFileId, setSelectedFileId] = useState('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,34 +79,11 @@ export default function DiagramGenerator() {
       return;
     }
 
-    let projectInfoText = projectInfo.trim();
-    let selectedFileContent = '';
+    const projectInfoText = projectInfo.trim();
 
-    if (inputMethod === 'file') {
-      if (!selectedFileId) {
-        setError('Please select a file from the sidebar.');
-        return;
-      }
-      const selectedDoc = documents.find((d) => d.id === selectedFileId);
-      if (!selectedDoc) {
-        setError('Selected file not found.');
-        return;
-      }
-      try {
-        selectedFileContent = await extractTextFromDocument(selectedDoc);
-        if (!selectedFileContent || !selectedFileContent.trim()) {
-          setError('Selected file contains no extractable text.');
-          return;
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to extract text from selected file.');
-        return;
-      }
-    } else {
-      if (!projectInfoText) {
-        setError('Please provide information about the diagram or select a file.');
-        return;
-      }
+    if (!projectInfoText && contextDocs.length === 0) {
+      setError('Provide diagram details or mark at least one sidebar document as "Use in context".');
+      return;
     }
 
     setLoading(true);
@@ -124,7 +99,6 @@ export default function DiagramGenerator() {
           diagram_type: diagramType,
           project_info: projectInfoText,
           context_text: contextText,
-          selected_file_content: selectedFileContent,
         }),
       });
 
@@ -224,7 +198,8 @@ export default function DiagramGenerator() {
           <section className="diagram-card">
             <h2 className="diagram-card-title">Configure Diagram</h2>
             <p className="diagram-card-description">
-              Select the type of diagram you want to generate and provide the necessary information.
+              Select the type of diagram you want to generate and provide optional details. Documents marked
+              &quot;Use in context&quot; in the sidebar are automatically included.
             </p>
             <form className="diagram-form" onSubmit={handleSubmit}>
               <label className="diagram-label">
@@ -245,65 +220,15 @@ export default function DiagramGenerator() {
               </label>
 
               <label className="diagram-label">
-                Input Method
-                <div className="diagram-radio-group">
-                  <label className="diagram-radio-label">
-                    <input
-                      type="radio"
-                      name="inputMethod"
-                      value="text"
-                      checked={inputMethod === 'text'}
-                      onChange={(e) => setInputMethod(e.target.value)}
-                    />
-                    <span>Enter information manually</span>
-                  </label>
-                  <label className="diagram-radio-label">
-                    <input
-                      type="radio"
-                      name="inputMethod"
-                      value="file"
-                      checked={inputMethod === 'file'}
-                      onChange={(e) => setInputMethod(e.target.value)}
-                    />
-                    <span>Select file from sidebar</span>
-                  </label>
-                </div>
+                Diagram Details (optional)
+                <textarea
+                  className="diagram-textarea"
+                  rows={10}
+                  value={projectInfo}
+                  onChange={(e) => setProjectInfo(e.target.value)}
+                  placeholder="Add any specific flows, entities, or notes to guide the diagram. Context documents marked as 'Use in context' will be included automatically."
+                />
               </label>
-
-              {inputMethod === 'text' ? (
-                <label className="diagram-label">
-                  Project Information / Diagram Details *
-                  <textarea
-                    className="diagram-textarea"
-                    rows={10}
-                    value={projectInfo}
-                    onChange={(e) => setProjectInfo(e.target.value)}
-                    placeholder="Describe the system, components, interactions, or entities you want to visualize. For example:\n- User authentication flow\n- Database schema with entities: User, Order, Product\n- System architecture with services: API Gateway, Auth Service, Database"
-                  />
-                </label>
-              ) : (
-                <label className="diagram-label">
-                  Select File from Sidebar *
-                  <select
-                    className="diagram-select"
-                    value={selectedFileId}
-                    onChange={(e) => setSelectedFileId(e.target.value)}
-                    required={inputMethod === 'file'}
-                  >
-                    <option value="">Select a file...</option>
-                    {documents.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.name} ({doc.type || 'Document'})
-                      </option>
-                    ))}
-                  </select>
-                  {documents.length === 0 && (
-                    <p className="diagram-helper error">
-                      No files available. Upload or generate documents first.
-                    </p>
-                  )}
-                </label>
-              )}
 
               {status && <div className="diagram-status">{status}</div>}
               {error && <div className="diagram-error">{error}</div>}

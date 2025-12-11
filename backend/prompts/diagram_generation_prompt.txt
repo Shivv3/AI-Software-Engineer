@@ -31,11 +31,28 @@ Instructions:
 - For use case diagrams: show actors, use cases, and relationships.
 - For architecture diagrams: show components, services, databases, and their connections.
 
+### Mermaid Code Constraints
+- For graph/flowchart diagrams: NEVER use colon labels (A --> B: Label). Use pipes: A -->|Label| B or line labels: A -- Label --> B.
+- Do NOT emit non-breaking spaces (\\u00A0 or &nbsp;). Use plain ASCII spaces.
+- Node IDs must be single tokens (alphanumeric/underscore). Put human-readable labels in brackets, e.g., AuthService["Authentication Service"].
+- Use `graph TD` or `graph LR` (not `flowchart` unless explicitly requested).
+- Keep `mermaid_code` as plain text with `\\n` newlines and normal spaces; no special indentation characters.
+
+### Example of Correct vs Incorrect Flowchart Syntax
+❌ Incorrect (do NOT do this):
+graph TD
+  A[User] --> B[Server]: Sends Request
+
+✅ Correct (do this):
+graph TD
+  A[User] -- "Sends Request" --> B[Server]
+  %% or
+  A[User] -->|Sends Request| B[Server]
+
 Example Mermaid syntax:
 - Sequence: sequenceDiagram\n  participant A\n  participant B\n  A->>B: Message
 - ER: erDiagram\n  CUSTOMER {\n    int id PK\n    string name\n    string email UK\n  }\n  ORDER {\n    int id PK\n    int customer_id\n    date order_date\n  }\n  CUSTOMER ||--o{ ORDER : places
-- Flowchart: flowchart TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Action]
-- Graph: graph LR\n  A --> B\n  B --> C
+- Graph: graph TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Action]
 
 Generate the Mermaid code now:
 

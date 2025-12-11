@@ -276,6 +276,187 @@ export default function SystemDesignWizard() {
 
     const { high_level_design, tech_stack, implementation_architecture, assumptions, next_steps, design_text } = designResult;
 
+    const buildTabText = (tabKey) => {
+      if (design_text) return design_text;
+      const wrap = (title, lines) => [title, ...lines].filter(Boolean).join('\n');
+
+      switch (tabKey) {
+        case 'high_level_design':
+          return wrap('High-Level Design (Narrative)', [
+            high_level_design?.summary || '',
+            '',
+            'Key components (with roles):',
+            ...(high_level_design?.key_components || []),
+            '',
+            'Primary data flows (stepwise):',
+            ...(high_level_design?.data_flow || []),
+            '',
+            'Integration points (systems, protocols):',
+            ...(high_level_design?.integration_points || [])
+          ]);
+        case 'tech_stack':
+          return wrap('Tech Stack & Reasoning', [
+            'Frontend stack:', ...(tech_stack?.frontend || []),
+            '',
+            'Backend stack:', ...(tech_stack?.backend || []),
+            '',
+            'Data tier:', ...(tech_stack?.data || []),
+            '',
+            'Infrastructure / platform:', ...(tech_stack?.infrastructure || []),
+            '',
+            'Observability:', ...(tech_stack?.observability || []),
+            '',
+            tech_stack?.reasoning ? `Reasoning: ${tech_stack.reasoning}` : '',
+            '',
+            'Alternatives considered:', ...(tech_stack?.alternatives || [])
+          ]);
+        case 'implementation_architecture':
+          return wrap('Implementation Architecture', [
+            implementation_architecture?.style ? `Architecture style: ${implementation_architecture.style}` : '',
+            '',
+            'Services / modules (purpose, interfaces, data owned):',
+            ...(implementation_architecture?.services || []),
+            '',
+            implementation_architecture?.api_strategy ? `API strategy: ${implementation_architecture.api_strategy}` : '',
+            implementation_architecture?.data_strategy ? `Data strategy: ${implementation_architecture.data_strategy}` : '',
+            implementation_architecture?.scalability ? `Scalability approach: ${implementation_architecture.scalability}` : '',
+            implementation_architecture?.security ? `Security controls: ${implementation_architecture.security}` : '',
+            '',
+            'Trade-offs:',
+            ...(implementation_architecture?.tradeoffs || [])
+          ]);
+        case 'assumptions':
+          return wrap('Assumptions & Open Questions', [...(assumptions || [])]);
+        case 'next_steps':
+          return wrap('Next Steps', [...(next_steps || [])]);
+        case 'diagram_sequence':
+          return wrap('Diagram Context · Sequence', [
+            'Goal: Show request/response and async steps across actors.',
+            '',
+            'Actors / participants (ordered):',
+            ...(high_level_design?.key_components || implementation_architecture?.services || []),
+            '',
+            'Critical flows (numbered, concise):',
+            ...(high_level_design?.data_flow || []),
+            '',
+            'Integration points (protocols, direction):',
+            ...(high_level_design?.integration_points || []),
+            '',
+            'Error/timeout paths if relevant.'
+          ]);
+        case 'diagram_er':
+          return wrap('Diagram Context · ER', [
+            'Goal: Entities, attributes, PK/UK, relationships, cardinality.',
+            '',
+            'Data strategy:',
+            implementation_architecture?.data_strategy || '',
+            '',
+            'Key entities (name, key fields, uniqueness):',
+            ...(high_level_design?.key_components || []),
+            '',
+            'Data components / stores:',
+            ...(tech_stack?.data || []),
+            '',
+            'Relationships (direction, cardinality, optionality):',
+            ...(high_level_design?.integration_points || []),
+            '',
+            'Notes: strong consistency for student updates; eventual for reports.'
+          ]);
+        case 'diagram_dataflow':
+          return wrap('Diagram Context · Data Flow', [
+            'Goal: Show processes, data stores, external systems, and data movement.',
+            '',
+            'Processes / services (what they do with data):',
+            ...(implementation_architecture?.services || high_level_design?.key_components || []),
+            '',
+            'Data stores (read/write patterns, caching):',
+            ...(tech_stack?.data || []),
+            '',
+            'Flows (source -> target | payload | sync/async | protocol):',
+            ...(high_level_design?.data_flow || []),
+            '',
+            'Integration points (legacy, auth, external):',
+            ...(high_level_design?.integration_points || []),
+            '',
+            'Observability signals on flows (logs/metrics/traces).'
+          ]);
+        case 'diagram_usecase':
+          return wrap('Diagram Context · Use Case', [
+            'Goal: Actors to high-level use cases with associations.',
+            '',
+            'Actors:',
+            ...(high_level_design?.key_components || []),
+            '',
+            'Use cases (short, imperative):',
+            ...(high_level_design?.integration_points || []),
+            '',
+            form.priorities ? `Business priorities: ${form.priorities}` : ''
+          ]);
+        case 'diagram_architecture':
+          return wrap('Diagram Context · Architecture', [
+            'Goal: Components, data stores, messaging, infra boundaries, and observability.',
+            '',
+            implementation_architecture?.style ? `Architecture style: ${implementation_architecture.style}` : '',
+            '',
+            'Services / modules (responsibility, interface, data owned):',
+            ...(implementation_architecture?.services || []),
+            '',
+            implementation_architecture?.api_strategy ? `API strategy: ${implementation_architecture.api_strategy}` : '',
+            implementation_architecture?.data_strategy ? `Data strategy: ${implementation_architecture.data_strategy}` : '',
+            '',
+            'Infrastructure (edge, gateways, runtimes, queues, caches, DBs):',
+            ...(tech_stack?.infrastructure || []),
+            ...(tech_stack?.data || []),
+            '',
+            'Observability & security (logs/metrics/traces, IAM, error tracking):',
+            ...(tech_stack?.observability || []),
+            implementation_architecture?.security ? `Security: ${implementation_architecture.security}` : ''
+          ]);
+        default:
+          return '';
+      }
+    };
+
+    const handleDownloadTab = (tabKey) => {
+      const txt = buildTabText(tabKey);
+      if (!txt.trim()) {
+        setError('Nothing to download for this tab yet.');
+        return;
+      }
+      const dateTag = new Date().toISOString().split('T')[0];
+      downloadText(`Design_${tabKey}_${dateTag}.txt`, txt);
+    };
+
+    const handleSaveTab = async (tabKey) => {
+      const txt = buildTabText(tabKey);
+      if (!txt.trim()) {
+        setError('Nothing to save for this tab yet.');
+        return;
+      }
+      const dateTag = new Date().toISOString().split('T')[0];
+      await addDocument({
+        name: `Design ${tabKey} ${dateTag}`,
+        type: 'Design',
+        mime: 'text/plain',
+        content: txt,
+        useAsContext: true,
+        createdAt: new Date().toISOString(),
+      });
+      setSaveMessage('Saved to sidebar and marked for context');
+      setTimeout(() => setSaveMessage(''), 3000);
+    };
+
+    const renderTabActions = (tabKey) => (
+      <div className="design-tab-actions">
+        <button className="design-download-button" onClick={() => handleDownloadTab(tabKey)}>
+          Download
+        </button>
+        <button className="design-download-button ghost" onClick={() => handleSaveTab(tabKey)}>
+          Save to sidebar
+        </button>
+      </div>
+    );
+
     const renderTabContent = () => {
       if (design_text) {
         return (
@@ -288,6 +469,7 @@ export default function SystemDesignWizard() {
         case 'high_level_design':
           return (
             <div className="design-tab-panel">
+              {renderTabActions('high_level_design')}
               <h3>High-Level Design</h3>
               {high_level_design?.summary && <p className="design-body">{high_level_design.summary}</p>}
               <h4>Key components</h4>
@@ -301,6 +483,7 @@ export default function SystemDesignWizard() {
         case 'tech_stack':
           return (
             <div className="design-tab-panel">
+              {renderTabActions('tech_stack')}
               <h3>Tech Stack &amp; Reasoning</h3>
               <h4>Frontend</h4>
               {renderList(tech_stack?.frontend)}
@@ -324,6 +507,7 @@ export default function SystemDesignWizard() {
         case 'implementation_architecture':
           return (
             <div className="design-tab-panel">
+              {renderTabActions('implementation_architecture')}
               <h3>Implementation Architecture</h3>
               {implementation_architecture?.style && (
                 <p className="design-body">
@@ -359,6 +543,7 @@ export default function SystemDesignWizard() {
         case 'assumptions':
           return (
             <div className="design-tab-panel">
+              {renderTabActions('assumptions')}
               <h3>Assumptions</h3>
               {renderList(assumptions)}
             </div>
@@ -366,8 +551,92 @@ export default function SystemDesignWizard() {
         case 'next_steps':
           return (
             <div className="design-tab-panel">
+              {renderTabActions('next_steps')}
               <h3>Next Steps</h3>
               {renderList(next_steps)}
+            </div>
+          );
+        case 'diagram_sequence':
+          return (
+            <div className="design-tab-panel">
+              {renderTabActions('diagram_sequence')}
+              <h3>Diagram Context · Sequence</h3>
+              <h4>Actors / Participants</h4>
+              {renderList(high_level_design?.key_components || implementation_architecture?.services)}
+              <h4>Flows</h4>
+              {renderList(high_level_design?.data_flow)}
+              <h4>Integration points</h4>
+              {renderList(high_level_design?.integration_points)}
+            </div>
+          );
+        case 'diagram_er':
+          return (
+            <div className="design-tab-panel">
+              {renderTabActions('diagram_er')}
+              <h3>Diagram Context · ER</h3>
+              <h4>Data strategy</h4>
+              <p className="design-body">{implementation_architecture?.data_strategy || 'Not provided.'}</p>
+              <h4>Data components</h4>
+              {renderList(tech_stack?.data)}
+              <h4>Key entities (implied)</h4>
+              {renderList(high_level_design?.key_components)}
+            </div>
+          );
+        case 'diagram_dataflow':
+          return (
+            <div className="design-tab-panel">
+              {renderTabActions('diagram_dataflow')}
+              <h3>Diagram Context · Data Flow</h3>
+              <h4>Processes / Services</h4>
+              {renderList(implementation_architecture?.services || high_level_design?.key_components)}
+              <h4>Data flow</h4>
+              {renderList(high_level_design?.data_flow)}
+              <h4>Integration points</h4>
+              {renderList(high_level_design?.integration_points)}
+            </div>
+          );
+        case 'diagram_usecase':
+          return (
+            <div className="design-tab-panel">
+              {renderTabActions('diagram_usecase')}
+              <h3>Diagram Context · Use Case</h3>
+              <h4>Key interactions</h4>
+              {renderList(high_level_design?.key_components)}
+              <h4>Integration points</h4>
+              {renderList(high_level_design?.integration_points)}
+              {form.priorities && (
+                <p className="design-body">
+                  <strong>Priorities:</strong> {form.priorities}
+                </p>
+              )}
+            </div>
+          );
+        case 'diagram_architecture':
+          return (
+            <div className="design-tab-panel">
+              {renderTabActions('diagram_architecture')}
+              <h3>Diagram Context · Architecture</h3>
+              {implementation_architecture?.style && (
+                <p className="design-body">
+                  <strong>Style:</strong> {implementation_architecture.style}
+                </p>
+              )}
+              <h4>Services / Modules</h4>
+              {renderList(implementation_architecture?.services)}
+              {implementation_architecture?.api_strategy && (
+                <p className="design-body">
+                  <strong>API strategy:</strong> {implementation_architecture.api_strategy}
+                </p>
+              )}
+              {implementation_architecture?.data_strategy && (
+                <p className="design-body">
+                  <strong>Data strategy:</strong> {implementation_architecture.data_strategy}
+                </p>
+              )}
+              <h4>Infrastructure</h4>
+              {renderList(tech_stack?.infrastructure)}
+              <h4>Observability</h4>
+              {renderList(tech_stack?.observability)}
             </div>
           );
         default:
@@ -407,6 +676,36 @@ export default function SystemDesignWizard() {
             onClick={() => setActiveTab('next_steps')}
           >
             Next Steps
+          </button>
+          <button
+            className={`design-tab ${activeTab === 'diagram_sequence' ? 'active' : ''}`}
+            onClick={() => setActiveTab('diagram_sequence')}
+          >
+            Diagram · Sequence
+          </button>
+          <button
+            className={`design-tab ${activeTab === 'diagram_er' ? 'active' : ''}`}
+            onClick={() => setActiveTab('diagram_er')}
+          >
+            Diagram · ER
+          </button>
+          <button
+            className={`design-tab ${activeTab === 'diagram_dataflow' ? 'active' : ''}`}
+            onClick={() => setActiveTab('diagram_dataflow')}
+          >
+            Diagram · Data Flow
+          </button>
+          <button
+            className={`design-tab ${activeTab === 'diagram_usecase' ? 'active' : ''}`}
+            onClick={() => setActiveTab('diagram_usecase')}
+          >
+            Diagram · Use Case
+          </button>
+          <button
+            className={`design-tab ${activeTab === 'diagram_architecture' ? 'active' : ''}`}
+            onClick={() => setActiveTab('diagram_architecture')}
+          >
+            Diagram · Architecture
           </button>
         </div>
         {renderTabContent()}

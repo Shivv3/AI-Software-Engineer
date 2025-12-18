@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import axios from 'axios';
 import './UniversalHomePage.css';
+
+axios.defaults.withCredentials = true;
 
 export default function UniversalHomePage() {
   const navigate = useNavigate();
@@ -15,18 +18,22 @@ export default function UniversalHomePage() {
   useEffect(() => {
     if (!projectId) return;
 
-    try {
-      const stored = JSON.parse(localStorage.getItem('ase.projects')) || [];
-      const match = stored.find((item) => item.id === projectId);
-      if (match) {
-        setProjectName(match.name);
-        setProjectNotFound(false);
-      } else {
+    const loadProject = async () => {
+      try {
+        const response = await axios.get(`/api/project/${projectId}`);
+        if (response.data) {
+          setProjectName(response.data.title || response.data.name || '');
+          setProjectNotFound(false);
+        } else {
+          setProjectNotFound(true);
+        }
+      } catch (error) {
+        console.error('Failed to load project:', error);
         setProjectNotFound(true);
       }
-    } catch {
-      setProjectNotFound(true);
-    }
+    };
+
+    loadProject();
   }, [projectId]);
 
   const navigateWithProjectState = (path) => {

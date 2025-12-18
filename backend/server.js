@@ -9,6 +9,8 @@ const Ajv = require('ajv');
 const { Document, Packer, Paragraph } = require('docx');
 const Database = require('better-sqlite3');
 const llm = require('./services/llm');
+const session = require('express-session');
+const crypto = require('crypto');
 
 // Document parsing libraries - using dynamic imports for ESM modules
 let pdfParseModule;
@@ -83,14 +85,24 @@ function formatContextBlock(context) {
 
 // Enable CORS
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+  if (req.session && req.session.userId) {
+    return next();
+  }
+  return res.status(401).json({ error: 'Authentication required' });
+}
 
 // Database setup
 const dbPath = path.resolve(__dirname, process.env.DB_PATH || './data/db.sqlite');
@@ -104,6 +116,18 @@ if (!require('fs').existsSync(dataDir)) {
 
 const db = new Database(dbPath);
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    user_id TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    phone_number TEXT,
+    age INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     title TEXT,
@@ -139,6 +163,98 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Database migration: Add user_id column to projects table if it doesn't exist
+console.log('Checking database schema...');
+try {
+  // Check if projects table exists
+  const tableExists = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type='table' AND name='projects'
+  `).get();
+  
+  if (tableExists) {
+    const tableInfo = db.prepare(`PRAGMA table_info(projects)`).all();
+    const columnNames = tableInfo.map(col => col.name);
+    const hasUserIdColumn = columnNames.includes('user_id');
+    
+    console.log('Current projects table columns:', columnNames.join(', '));
+    
+    if (!hasUserIdColumn) {
+      console.log('⚠️  Migrating database: Adding user_id column to projects table...');
+      
+      // Disable foreign key constraints temporarily
+      db.exec(`PRAGMA foreign_keys = OFF`);
+      
+      try {
+        // Delete related records first (srs_versions, logs, etc.)
+        try {
+          const deleteVersions = db.prepare(`DELETE FROM srs_versions`);
+          deleteVersions.run();
+        } catch (e) {
+          // Table might not exist, ignore
+        }
+        
+        try {
+          const deleteLogs = db.prepare(`DELETE FROM logs`);
+          deleteLogs.run();
+        } catch (e) {
+          // Table might not exist, ignore
+        }
+        
+        // Delete all existing projects since they don't have user associations
+        const deleteStmt = db.prepare(`DELETE FROM projects`);
+        const result = deleteStmt.run();
+        console.log(`Deleted ${result.changes} existing projects without user associations.`);
+        
+        // Add user_id column
+        db.exec(`ALTER TABLE projects ADD COLUMN user_id TEXT`);
+        
+        // Re-enable foreign key constraints
+        db.exec(`PRAGMA foreign_keys = ON`);
+        
+        console.log('✅ Database migration completed successfully. user_id column added.');
+      } catch (migrationError) {
+        console.error('❌ Migration error:', migrationError.message);
+        // Re-enable foreign keys even if migration failed
+        db.exec(`PRAGMA foreign_keys = ON`);
+        throw migrationError;
+      }
+    } else {
+      console.log('✅ Database schema is up to date. user_id column exists.');
+    }
+  } else {
+    console.log('Projects table does not exist yet. It will be created with user_id column.');
+  }
+} catch (error) {
+  console.error('❌ Database migration error:', error);
+  console.error('Stack trace:', error.stack);
+  // Don't throw - allow server to start, but log the error clearly
+}
+
+// Password hashing helper functions
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, hash) {
+  const [salt, hashValue] = hash.split(':');
+  const hashVerify = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hashValue === hashVerify;
+}
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 
 // Load schemas
 const sdlcSchema = require('./schemas/sdlc_recommendation.schema.json');
@@ -195,6 +311,124 @@ async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedRe
 // Endpoints
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+// Authentication endpoints
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, user_id, password, phone_number, age } = req.body;
+
+    // Validation
+    if (!name || !email || !user_id || !password) {
+      return res.status(400).json({ error: 'Name, email, user ID, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Check if user_id or email already exists
+    const existingUser = db.prepare(`
+      SELECT user_id, email FROM users WHERE user_id = ? OR email = ?
+    `).get(user_id, email);
+
+    if (existingUser) {
+      if (existingUser.user_id === user_id) {
+        return res.status(400).json({ error: 'User ID already exists' });
+      }
+      if (existingUser.email === email) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+    }
+
+    // Create user
+    const userId = crypto.randomUUID();
+    const passwordHash = hashPassword(password);
+
+    db.prepare(`
+      INSERT INTO users (id, user_id, name, email, password_hash, phone_number, age)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, user_id, name, email, passwordHash, phone_number || null, age || null);
+
+    // Set session
+    req.session.userId = userId;
+    req.session.userIdDisplay = user_id;
+
+    res.json({
+      success: true,
+      user: {
+        id: userId,
+        user_id: user_id,
+        name: name,
+        email: email
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: error.message || 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { user_id, password } = req.body;
+
+    if (!user_id || !password) {
+      return res.status(400).json({ error: 'User ID and password are required' });
+    }
+
+    // Find user
+    const user = db.prepare(`
+      SELECT id, user_id, name, email, password_hash FROM users WHERE user_id = ?
+    `).get(user_id);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid user ID or password' });
+    }
+
+    // Verify password
+    if (!verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Invalid user ID or password' });
+    }
+
+    // Set session
+    req.session.userId = user.id;
+    req.session.userIdDisplay = user.user_id;
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        user_id: user.user_id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: error.message || 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true });
+  });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const user = db.prepare(`
+    SELECT id, user_id, name, email, phone_number, age FROM users WHERE id = ?
+  `).get(req.session.userId);
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  res.json({ user });
+});
 
 app.post('/api/sdlc/recommend', async (req, res) => {
   try {
@@ -738,31 +972,80 @@ app.post('/api/srs/apply', async (req, res) => {
 });
 
 // Create new project
-app.post('/api/project', (req, res) => {
+app.post('/api/project', requireAuth, (req, res) => {
   try {
     const { title, project_text } = req.body;
     const id = 'p' + Date.now();
+    const userId = req.session.userId;
 
     db.prepare(`
-      INSERT INTO projects (id, title, project_text, srs_content)
-      VALUES (?, ?, ?, '')
-    `).run(id, title, project_text);
+      INSERT INTO projects (id, user_id, title, project_text, srs_content)
+      VALUES (?, ?, ?, ?, '')
+    `).run(id, userId, title, project_text);
 
-    res.json({ id });
+    const project = db.prepare(`
+      SELECT id, title as name, created_at as createdAt
+      FROM projects
+      WHERE id = ?
+    `).get(id);
+
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete project
+app.delete('/api/project/:id', requireAuth, (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const projectId = req.params.id;
+
+    // Verify project belongs to user
+    const project = db.prepare(`
+      SELECT id FROM projects WHERE id = ? AND user_id = ?
+    `).get(projectId, userId);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Delete project (cascade will handle related records)
+    db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all projects for the current user
+app.get('/api/projects', requireAuth, (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const projects = db.prepare(`
+      SELECT id, title as name, created_at as createdAt
+      FROM projects
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).all(userId);
+
+    res.json(projects);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Get project details with latest SRS content
-app.get('/api/project/:id', (req, res) => {
+app.get('/api/project/:id', requireAuth, (req, res) => {
   try {
+    const userId = req.session.userId;
     const project = db.prepare(`
       SELECT p.*, 
         (SELECT COUNT(*) FROM srs_versions WHERE project_id = p.id) as version_count
       FROM projects p
-      WHERE p.id = ?
-    `).get(req.params.id);
+      WHERE p.id = ? AND p.user_id = ?
+    `).get(req.params.id, userId);
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });

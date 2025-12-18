@@ -1,50 +1,58 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import './ProjectsDashboard.css';
 
-const PROJECTS_KEY = 'ase.projects';
-const PROJECT_DATA_PREFIX = 'ase.project.data.';
-
-const loadProjects = () => {
-  try {
-    const raw = localStorage.getItem(PROJECTS_KEY);
-    return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const persistProjects = (items) => {
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(items));
-};
-
-const generateId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-};
-
-const clearProjectData = (projectId) => {
-  Object.keys(localStorage).forEach((key) => {
-    if (key.startsWith(`${PROJECT_DATA_PREFIX}${projectId}`)) {
-      localStorage.removeItem(key);
-    }
-  });
-};
+axios.defaults.withCredentials = true;
 
 export default function ProjectsDashboard() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState(() => loadProjects());
+  const [projects, setProjects] = useState([]);
   const [newProjectName, setNewProjectName] = useState('');
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    persistProjects(projects);
-  }, [projects]);
+    loadUser();
+    loadProjects();
+  }, []);
 
-  const handleCreate = () => {
+  const loadUser = async () => {
+    try {
+      const response = await axios.get('/api/auth/me');
+      setUser(response.data.user);
+    } catch (error) {
+      console.error('Failed to load user:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await axios.post('/api/auth/logout');
+      navigate('/auth');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      navigate('/auth');
+    }
+  };
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await axios.get('/api/projects');
+      setProjects(response.data || []);
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      setError(error.response?.data?.error || 'Failed to load projects. Please refresh the page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
     const trimmed = newProjectName.trim();
     if (!trimmed) {
       setError('Project name is required.');
@@ -57,22 +65,34 @@ export default function ProjectsDashboard() {
       return;
     }
 
-    const next = {
-      id: generateId(),
-      name: trimmed,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      setError('');
+      const response = await axios.post('/api/project', {
+        title: trimmed,
+        project_text: ''
+      });
 
-    setProjects([next, ...projects]);
-    setNewProjectName('');
-    setError('');
+      setProjects([response.data, ...projects]);
+      setNewProjectName('');
+    } catch (error) {
+      console.error('Create project error:', error);
+      setError(error.response?.data?.error || 'Failed to create project. Please try again.');
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    clearProjectData(deleteTarget.id);
-    setProjects(projects.filter((p) => p.id !== deleteTarget.id));
-    setDeleteTarget(null);
+
+    try {
+      setError('');
+      await axios.delete(`/api/project/${deleteTarget.id}`);
+      setProjects(projects.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Delete project error:', error);
+      setError(error.response?.data?.error || 'Failed to delete project. Please try again.');
+      setDeleteTarget(null);
+    }
   };
 
   const openProject = (project) => {
@@ -94,6 +114,23 @@ export default function ProjectsDashboard() {
               <span className="badge-icon">⚡</span>
               AI Software Engineer
             </span>
+            {user && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
+                  {user.name} ({user.user_id})
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="logout-button"
+                  title="Logout"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2H6M10 11L14 7M14 7L10 3M14 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
           </div>
           <h1 className="dashboard-title">
             Manage your projects
@@ -149,14 +186,19 @@ export default function ProjectsDashboard() {
             <span className="project-count-badge">{projects.length} {projects.length === 1 ? 'project' : 'projects'}</span>
           </div>
 
-          {projects.length === 0 && (
+          {loading ? (
+            <div className="empty-state-card">
+              <div className="empty-state-icon">⏳</div>
+              <p className="empty-state-text">Loading projects...</p>
+            </div>
+          ) : projects.length === 0 ? (
             <div className="empty-state-card">
               <div className="empty-state-icon">📁</div>
               <p className="empty-state-text">
                 No projects yet. Create one to get started with the AI Software Engineer workflow.
               </p>
             </div>
-          )}
+          ) : null}
 
           {projects.length > 0 && (
             <div className="projects-grid">

@@ -29,6 +29,55 @@ The project has a working core SDLC tool (auth, projects, SRS, design, implement
 | ML persistence | One table `ml_results(id, project_id, result_type, payload JSON, score INT, created_at)` |
 | Auth on ML routes | `requireAuth` middleware applied to all `/api/ml/*` and remaining unprotected routes |
 | Fallback for ML down | `503` with last cached result from `ml_results` (DB-backed, not in-memory) |
+| **Universal artifact IDs** | Every artifact gets a stable typed ID: `REQ-N`, `DES-N`, `CARD-N`, `FILE-N`, `TEST-N`. Issued at creation time, never reused. |
+| **Traceability storage** | Single `traceability_links` table — `(source_type, source_id) → (target_type, target_id)` with `link_type` and `confidence`. Manual links have confidence=1.0; SBERT-suggested links have the cosine score |
+| **Implementation phase shape** | The Kanban Board **replaces** the current ImplementationLab. `/projects/:id/implementation` renders the Board. Code generation, review, and translation move inside each card. |
+| **Traceability for defect/coverage** | Structured links (card↔req, file↔card, test↔card) are the **primary source of truth**. SBERT cosine is layered on as **orphan detection** — flags reqs with no linked card, code with no linked req. |
+| **Test linkage** | Tests inherit `req_ids` from their parent card automatically. `TEST-N` rows store `card_id` → transitively trace to requirements through `card.req_ids`. |
+
+---
+
+## End-to-End Traceability Spine
+
+This is the connective tissue. Every artifact has a stable typed ID and is linked into the chain:
+
+```
+        SRS Editor                  Design Page             Implementation Board       ValidationLab
+   ┌──────────────────┐         ┌──────────────────┐       ┌──────────────────┐    ┌──────────────────┐
+   │ REQ-1 (shall...) │◀───────▶│ DES-1 Auth Svc   │◀─────▶│ CARD-1 Login API │───▶│ TEST-1 ✓         │
+   │ REQ-2 (shall...) │  covers │ DES-2 Payment    │ deriv │ CARD-2 JWT Mwre  │    │ TEST-2 ✗         │
+   │ REQ-3 (shall...) │         │ DES-3 Audit Log  │       │ CARD-3 Refresh   │───▶│ TEST-3 ✓         │
+   │ REQ-4 (shall...) │         │                  │       │   ↓ produces     │    │ TEST-4 ✓         │
+   └──────────────────┘         └──────────────────┘       │ FILE-1 auth.py   │    └──────────────────┘
+            │                            │                  └──────────────────┘             │
+            │                            │                           │                       │
+            └────────────────────────────┴───────────────────────────┴───────────────────────┘
+                                                  │
+                                                  ▼
+                                    ┌─────────────────────────────┐
+                                    │  traceability_links table   │
+                                    │  (source, target, type)     │
+                                    └─────────────────────────────┘
+                                                  │
+                                                  ▼
+                              ┌─────────────────────────────────────────┐
+                              │  Traceability Matrix (Dashboard tab)    │
+                              │  Coverage · Heatmap · Orphan detection  │
+                              └─────────────────────────────────────────┘
+```
+
+**How a single requirement's status is computed:**
+
+```
+REQ-4 [Authenticate via JWT]
+  ├─ implemented?  → has any CARD with this REQ in card.req_ids?  → CARD-1, CARD-2 ✓
+  ├─ has code?     → any FILE linked to those cards?              → FILE-1 ✓
+  ├─ tested?       → any TEST linked to those cards?              → TEST-1, TEST-3 ✓
+  ├─ passing?      → all linked tests last_status='passed'?       → mixed (TEST-2 failing)
+  └─ status:       → "Failing" (red badge on matrix)
+```
+
+**SBERT plays a secondary role** — it scans for *suspected* gaps the structured links miss (a function whose semantics match a requirement but was never explicitly linked), surfacing them as "Suggested Links" the user can confirm with one click.
 
 ---
 
@@ -37,9 +86,9 @@ The project has a working core SDLC tool (auth, projects, SRS, design, implement
 | Day | Milestones | Outcome |
 |-----|-----------|---------|
 | **Day 1** | M0a Design tokens · M0b API client · M0c Backend modularization + auth fix · M0d ml-service scaffold · M0e Persistent sidebar | Foundation: unified visuals, hardened backend, ML service skeleton, integration spine live |
-| **Day 2** | M1 Project Dashboard · M2 NLP Requirements Analyzer · M3 Semantic Conflict Detector | First two ML features demoable, dashboard pulls phases together |
-| **Day 3** | M4 Code Intelligence Panel (defect predictor + traceability) | Biggest research-credibility feature in ValidationLab |
-| **Day 4** | M5 RAG Project Memory · M6 Multi-Agent + Adversarial Reviews · M7 Demo polish | All Layer-3 GenAI features, startup script, README, seed project |
+| **Day 2** | M1 Project Dashboard · **M1.5 Universal artifact IDs + traceability tables** · M2 NLP Analyzer · M3 Conflict Detector | Stable IDs across all artifacts, dashboard live, first two ML features shipping |
+| **Day 3** | **M4 Implementation Board** (replaces ImplementationLab) · **M4.5 Test integration with cards** · **M5 Traceability Matrix view** | End-to-end traceability live: SRS → Design → Cards → Code → Tests, visualized in one matrix |
+| **Day 4** | **M6 Code Intelligence (defect predictor + SBERT orphan detection)** · M7 RAG Memory · M8 Multi-Agent Reviews · M9 Demo polish | Research credibility (defect ML), Layer-3 GenAI features, demo-ready |
 
 ---
 
@@ -351,6 +400,102 @@ The **Reviews tab** is a placeholder until Day 4 (M6). The **Analytics tab** hol
 
 ---
 
+## M1.5 — Universal Artifact IDs + Traceability Tables (~1h)
+
+**Goal:** Every artifact (requirement, design component, card, file, test) has a stable typed ID. One table records every link between them. This is the spine of end-to-end traceability.
+
+### Schema additions (in `backend/db/schema.js`)
+
+```sql
+-- Tracks the next ID counter per project per type
+CREATE TABLE IF NOT EXISTS artifact_counters (
+  project_id TEXT NOT NULL,
+  artifact_type TEXT NOT NULL,   -- 'REQ' | 'DES' | 'CARD' | 'FILE' | 'TEST'
+  next_id INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (project_id, artifact_type)
+);
+
+-- Requirements parsed from SRS (one row per "shall" sentence)
+CREATE TABLE IF NOT EXISTS requirements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  req_id TEXT NOT NULL,           -- 'REQ-1', 'REQ-2'
+  text TEXT NOT NULL,
+  section TEXT,                    -- 'functional' | 'non-functional' | 'security' | ...
+  quality_score INTEGER,           -- last NLP analyzer score
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, req_id)
+);
+
+-- Design components extracted from system design doc
+CREATE TABLE IF NOT EXISTS design_components (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  des_id TEXT NOT NULL,            -- 'DES-1' (auth service, payment service, etc.)
+  name TEXT NOT NULL,
+  type TEXT,                       -- 'service' | 'table' | 'api' | 'module'
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, des_id)
+);
+
+-- Universal links table (the spine)
+CREATE TABLE IF NOT EXISTS traceability_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,       -- 'requirement' | 'design' | 'card' | 'file' | 'test'
+  source_id TEXT NOT NULL,         -- 'REQ-1', 'CARD-3', etc.
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  link_type TEXT NOT NULL,         -- 'implements' | 'tests' | 'covers' | 'derived_from'
+  confidence REAL DEFAULT 1.0,     -- 1.0 = manual/structured, <1.0 = SBERT-suggested
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, source_type, source_id, target_type, target_id, link_type)
+);
+CREATE INDEX IF NOT EXISTS idx_trace_source ON traceability_links(project_id, source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_trace_target ON traceability_links(project_id, target_type, target_id);
+```
+
+### Backfill from existing SRS
+
+When SRS is finalized (`/api/srs/generate-final` already exists), add a hook that:
+1. Parses `srs_content` for sentences containing "shall" or "must"
+2. Inserts each as a `requirements` row with auto-incremented `REQ-N` from `artifact_counters`
+3. Re-runs on every SRS approval — IDs are stable (text match preserves prior assignments; new sentences get new IDs)
+
+### Helper service: `backend/services/artifacts.js`
+
+```javascript
+export function issueId(projectId, type) {
+  // atomic increment of artifact_counters; returns 'REQ-7', 'CARD-3', etc.
+}
+export function linkArtifacts(projectId, source, target, linkType, confidence = 1.0) {
+  // INSERT OR IGNORE into traceability_links
+}
+export function getLinks(projectId, { sourceType, sourceId, targetType, targetId, linkType } = {}) {
+  // flexible query for any link slice
+}
+export function getCoverage(projectId, artifactType) {
+  // returns { covered: N, total: M, orphans: [...] }
+}
+```
+
+### NLP analyzer integration (modifies M2)
+
+When M2 runs, the analyzer receives `requirements` rows directly (with stable IDs) instead of raw sentence strings. Quality scores update `requirements.quality_score` per row. The "Quality" panel in SRSEditor now shows `REQ-3: 67 — fix the vague term 'fast'` instead of just the sentence.
+
+### Design component extraction (extends Design phase)
+
+After `POST /api/design/system` returns, parse the design doc for component names (use a simple regex on headings like `## Auth Service` or `### Payment Gateway`, plus the LLM can be asked to output JSON with `components: [{name, type, description}]`). Insert as `design_components` rows with `DES-N` IDs.
+
+**Acceptance:**
+- After SRS generation, `SELECT * FROM requirements WHERE project_id = ?` returns one row per "shall" sentence with stable `REQ-N` IDs
+- After Design generation, `SELECT * FROM design_components` shows extracted components
+- `linkArtifacts(p, {type:'card', id:'CARD-1'}, {type:'requirement', id:'REQ-4'}, 'implements')` creates the link
+- `getLinks(p, {sourceType:'requirement', sourceId:'REQ-4'})` returns all downstream artifacts
+
+---
+
 ## M2 — NLP Requirements Quality Analyzer (~3h)
 
 Implements the M2 plan from [2026-05-19-btech-ml-nlp-research-layer-pure-rivest.md](2026-05-19-btech-ml-nlp-research-layer-pure-rivest.md) — **but** with these adjustments to match locked decisions:
@@ -401,51 +546,327 @@ Implements [semantic.md](semantic.md) — the SBERT + spaCy two-stage pipeline.
 
 ---
 
-# DAY 3 — Code Intelligence Panel
+# DAY 3 — Implementation Board + End-to-End Traceability
 
-## M4 — Defect Predictor + Traceability Matrix (~6h)
+## M4 — Implementation Board (replaces ImplementationLab) (~4h)
 
-Implements [2026-05-21-code-intelligence-panel-design.md](2026-05-21-code-intelligence-panel-design.md) — **but** on the single ml-service at port 8000.
+**Goal:** Convert design artifacts into a Kanban-style board of implementation cards. Each card is linked to specific requirements and design components, and clicking "Generate Code" produces design-aware code that lands as a tracked file.
 
-### M4a — Train defect model (~1.5h)
+### M4a — Schema additions (~15min)
 
-- `ml-service/code_intel/train_defect_model.py`
-  - Downloads PROMISE ARFF files (kc1, kc2, pc1) from `klainfo/DefectData` GitHub mirror
-  - Trains `RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)` on 5 features: CC, Halstead Volume, Halstead Effort, LOC, n_functions
-  - Saves to `ml-service/code_intel/models/defect_rf_v1.joblib` + `model_metadata.json` (AUC, F1, P, R on held-out 20%)
-  - **Synthetic fallback** (~50 examples) if download fails so the demo still works
-- Run once: `cd ml-service && python -m code_intel.train_defect_model`
+Add to `backend/db/schema.js`:
 
-### M4b — Inference endpoint (~1.5h)
+```sql
+CREATE TABLE IF NOT EXISTS implementation_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  card_id TEXT NOT NULL,             -- 'CARD-1'
+  epic TEXT NOT NULL,                -- 'Auth System', 'Payment Service'
+  title TEXT NOT NULL,
+  description TEXT,
+  complexity TEXT,                    -- 'S' | 'M' | 'L'
+  status TEXT DEFAULT 'todo',         -- 'todo' | 'in_progress' | 'generated' | 'reviewed' | 'done'
+  position INTEGER DEFAULT 0,
+  acceptance_criteria TEXT,           -- JSON array of strings
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, card_id)
+);
 
-- `ml-service/code_intel/radon_features.py` — Python: real radon; JS/other: regex approximation (count `if/for/while/switch/case/catch` as CC)
-- `ml-service/code_intel/defect_predictor.py` — load joblib once via `@lru_cache`, `predict_proba`, SHAP TreeExplainer top-3 features
-- `ml-service/main.py` — register `POST /code/defect/predict`
+CREATE TABLE IF NOT EXISTS project_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  file_id TEXT NOT NULL,              -- 'FILE-1'
+  card_id TEXT,                       -- the card that produced this file
+  path TEXT NOT NULL,                  -- 'backend/auth.py'
+  language TEXT,                       -- 'python' | 'javascript' | ...
+  content TEXT NOT NULL,
+  defect_risk_score REAL,              -- last M6 prediction (0-1)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, file_id)
+);
+```
 
-### M4c — Traceability endpoint (~1h)
+### M4b — Breakdown endpoint (~45min)
 
-- `ml-service/code_intel/traceability.py` — SBERT encode reqs + functions, cosine matrix, classify links (strong ≥0.65, weak 0.45-0.65), find orphans, compute coverage_pct
-- `ml-service/main.py` — register `POST /code/traceability/analyze`
+**`POST /api/implementation/breakdown`** (in `backend/routes/implementation.js`):
 
-### M4d — Frontend panel (~2h)
+```javascript
+// Inputs: project_id
+// Reads: latest SRS, system_design, schema, requirements[], design_components[]
+// Calls Gemini with a prompt that returns strict JSON:
+//   { epics: [{ name, cards: [{ title, description, complexity, req_ids: ['REQ-1','REQ-3'],
+//                              design_ids: ['DES-2'], acceptance_criteria: ['...']}]}]}
+// For each card returned:
+//   - issueId(p, 'CARD') → card_id
+//   - INSERT into implementation_cards
+//   - For each req_id: linkArtifacts(p, {card_id}, {requirement, req_id}, 'implements')
+//   - For each des_id: linkArtifacts(p, {card_id}, {design, des_id}, 'derived_from')
+```
 
-- `frontend/src/components/CodeIntelligencePanel.jsx` — two-column layout (defect heatmap left, traceability matrix right) per the design spec, using design tokens
-- `frontend/src/components/CodeIntelligencePanel.css`
-- `frontend/src/components/ValidationLab.jsx` — add an **"Intelligence" tab** that renders `CodeIntelligencePanel`
-- `backend/routes/ml.js` — add `POST /api/ml/defect/predict` and `POST /api/ml/traceability/analyze`, save results to `ml_results`
+**Prompt:** `backend/prompts/breakdown.txt` — instructs Gemini to:
+1. Group functionality into 3-6 epics
+2. For each epic, produce 2-5 cards with vertical-slice scope (one card ≈ one PR)
+3. Each card MUST cite `req_ids` and `design_ids` it implements
+4. Output strict JSON (uses existing `parseLLMJson`)
 
-**Wire into dashboard:** ValidationLab phase card on the dashboard now shows `quality.score` (avg defect_risk inverted to 0-100). Implementation phase card shows traceability `coverage_pct`.
+### M4c — Card-to-code generation (~1h)
+
+**`POST /api/implementation/cards/:cardId/generate-code`**:
+
+```javascript
+// 1. Load card + linked requirements + linked design components
+// 2. Build context: { srs_excerpts, design_excerpts, schema, tech_stack, card }
+// 3. Call existing llm.generate() with code-gen prompt (reuses /api/code/generate logic)
+// 4. Suggest file path (e.g., 'backend/auth.py') — LLM returns this
+// 5. issueId(p, 'FILE') → file_id; INSERT into project_files
+// 6. linkArtifacts(p, {file_id}, {card_id}, 'implements')
+// 7. UPDATE card.status = 'generated'
+// 8. Return { file_id, path, content, linked_requirements }
+```
+
+### M4d — Frontend: Kanban Board (~2h)
+
+**Replace** [frontend/src/components/ImplementationLab.jsx](frontend/src/components/ImplementationLab.jsx) with `ImplementationBoard.jsx`:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Implementation Board                  [Re-generate cards] [+ Add card] │
+├────────────────────────────────────────────────────────────────────────┤
+│ EPIC: Auth System                                                       │
+│ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐        │
+│ │  TODO      │  │  IN PROG   │  │ GENERATED  │  │  DONE      │        │
+│ │            │  │            │  │            │  │            │        │
+│ │ CARD-1     │  │ CARD-2     │  │ CARD-3     │  │ CARD-4     │        │
+│ │ User Login │  │ JWT Mwre   │  │ Reset Pwd  │  │ Logout API │        │
+│ │ M · REQ-4  │  │ S · REQ-4  │  │ M · REQ-7  │  │ S · REQ-5  │        │
+│ │ [Generate]│  │ [Generate]│  │ [View Code]│  │ ✓ 3 tests  │        │
+│ └────────────┘  └────────────┘  └────────────┘  └────────────┘        │
+│                                                                         │
+│ EPIC: Payment Service                                                   │
+│ ...                                                                     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**Card detail drawer** (opens on click):
+- Title, description, complexity badge
+- Linked requirements (clickable chips → opens SRS panel showing that REQ)
+- Linked design components (chips → opens design doc)
+- Acceptance criteria checklist
+- Generated code (Monaco-lite viewer with syntax highlighting via `prismjs` — already used elsewhere or add)
+- Buttons: "Generate Code" | "Regenerate" | "Generate Tests" | "Mark Done"
+
+Drag-and-drop between columns via `react-beautiful-dnd` (or `@hello-pangea/dnd` — drop-in fork, well-maintained).
+
+**Dashboard wiring:** Implementation phase card shows `{N} cards · {M}% done`. PhaseSidebar score = % cards in "done" status.
 
 **Acceptance:**
-- Paste a Python function with high CC into ValidationLab → Intelligence tab shows risk badge + SHAP top-3 factors
-- With SRS requirements in context, traceability matrix shows green/yellow cells + coverage percentage
-- Phase scores appear in PhaseSidebar
+- Click "Re-generate cards" → cards populate within 8s, each linked to specific REQ-N
+- Click a card → drawer opens showing linked requirements as chips
+- Click "Generate Code" → code appears in drawer + a `project_files` row created
+- Drag card to "Done" → status persists, sidebar % updates
 
 ---
 
-# DAY 4 — Layer 3 Agentic + Demo Polish
+## M4.5 — Testing Integration with Cards (~2h)
 
-## M5 — RAG Project Memory (~2h)
+**Goal:** ValidationLab's test generation now operates per-card. Tests inherit the card's `req_ids` so a passing/failing test traces back to specific requirements.
+
+### M4.5a — Schema (~10min)
+
+```sql
+CREATE TABLE IF NOT EXISTS test_cases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  test_id TEXT NOT NULL,             -- 'TEST-1'
+  card_id TEXT NOT NULL,             -- inherits req_ids transitively
+  file_id TEXT,                       -- the source file being tested
+  name TEXT NOT NULL,                 -- 'test_login_with_valid_credentials'
+  code TEXT NOT NULL,
+  framework TEXT,                     -- 'pytest' | 'jest' | 'unittest'
+  last_status TEXT DEFAULT 'pending', -- 'passed' | 'failed' | 'pending'
+  last_run_at DATETIME,
+  failure_message TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(project_id, test_id)
+);
+```
+
+### M4.5b — Generation endpoint (~45min)
+
+**`POST /api/implementation/cards/:cardId/generate-tests`**:
+
+```javascript
+// 1. Load card + its generated file + linked requirements
+// 2. Build prompt: "Generate {framework} tests for the following code that verify
+//    these requirements: {req texts}. Output JSON array of {name, code}."
+// 3. Parse → for each test:
+//    - issueId(p, 'TEST') → test_id
+//    - INSERT test_cases (card_id = card, file_id = file)
+//    - linkArtifacts(p, {test_id}, {card_id}, 'tests')
+//    - For each req in card.req_ids: linkArtifacts(p, {test_id}, {req_id}, 'verifies')
+// 4. Return list of test IDs + names
+```
+
+### M4.5c — Test execution (~30min)
+
+**`POST /api/implementation/tests/run`** — runs a list of tests (or all for a project).
+
+For Python: spawns `pytest` in a temp dir against the assembled `project_files` of language `python`. Captures pass/fail per test and updates `test_cases.last_status`.
+
+For JS: spawns `node` with a tiny in-process assertion harness (avoid full jest install on demo) OR use `vitest --run` if already available.
+
+**Demo simplification:** If real execution is too risky, fall back to "AI-evaluated tests" — Gemini gets the code + tests and returns a JSON `{test_id, status, reason}`. Less rigorous but always works in a demo.
+
+### M4.5d — ValidationLab UI changes (~45min)
+
+[frontend/src/components/ValidationLab.jsx](frontend/src/components/ValidationLab.jsx) gets restructured:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ ValidationLab                                           │
+├────────────────────────────────────────────────────────┤
+│ Tests · Intelligence (Day 4) · Coverage                │
+├────────────────────────────────────────────────────────┤
+│ TESTS TAB                                               │
+│                                                         │
+│ Filter by card: [All ▼] [Run All Tests]                │
+│                                                         │
+│ ✓ TEST-1  test_login_valid          CARD-1 → REQ-4    │
+│ ✗ TEST-2  test_login_invalid_pwd    CARD-1 → REQ-4    │
+│   └ AssertionError: expected 401, got 500              │
+│ ✓ TEST-3  test_jwt_expiry           CARD-2 → REQ-4    │
+│ ✓ TEST-4  test_password_reset       CARD-3 → REQ-7    │
+│                                                         │
+│ Summary: 12/15 passing (80%)                            │
+└────────────────────────────────────────────────────────┘
+```
+
+Each row shows the full trace: `TEST → CARD → REQ`. Click any chip → opens that artifact.
+
+**Dashboard wiring:** Quality phase score = % tests passing. Click a failing test → opens drawer with the failing requirement highlighted ("REQ-4 is at risk").
+
+**Acceptance:**
+- Click "Generate Tests" on a card → tests appear in `test_cases`
+- Run tests → pass/fail recorded with timestamps
+- Failing test shows full trace back to requirement
+- Quality phase score on dashboard reflects pass rate
+
+---
+
+## M5 — Traceability Matrix View (the unifier) (~2h)
+
+**Goal:** One view that proves end-to-end traceability. Lives on the Project Dashboard as the **"Traceability" tab** (third tab next to Overview and Reviews).
+
+### M5a — Aggregation endpoint (~30min)
+
+**`GET /api/projects/:id/traceability`** returns:
+
+```json
+{
+  "requirements": [
+    {
+      "req_id": "REQ-1",
+      "text": "The system shall authenticate users via JWT",
+      "quality_score": 92,
+      "linked_cards": ["CARD-1", "CARD-2"],
+      "linked_files": ["FILE-1", "FILE-3"],
+      "linked_tests": ["TEST-1", "TEST-2", "TEST-3"],
+      "test_pass_rate": 1.0,
+      "status": "implemented"   // 'unimplemented' if no cards, 'untested' if no tests, 'failing' if any test fails
+    }
+  ],
+  "orphan_code": [               // SBERT augmentation: files with no card link or low similarity
+    { "file_id": "FILE-7", "path": "backend/utils.py", "reason": "no card link" }
+  ],
+  "coverage_summary": {
+    "total_requirements": 14,
+    "implemented": 11,
+    "tested": 9,
+    "passing": 8,
+    "coverage_pct": 78.6
+  }
+}
+```
+
+### M5b — Three visualizations (~1.5h)
+
+**1. Heatmap (default view):**
+
+```
+                  CARD-1  CARD-2  CARD-3  CARD-4    Files   Tests   Status
+REQ-1 [Auth]       ●       ●                         2       3 ✓    Implemented
+REQ-2 [Payments]            ●       ●                2       4 ✓    Implemented
+REQ-3 [Logging]                              ●        1       0     Untested ⚠
+REQ-4 [GDPR]                                         0       0      UNIMPLEMENTED ✗
+REQ-5 [Reports]    ●                ●                2       2 ✗    Failing 🔴
+```
+
+Cells colored using design tokens (`--color-success/warn/danger`).
+
+**2. Sankey diagram** (optional, time permitting): `recharts` Sankey component showing flow from Requirements → Cards → Files → Tests with width = link count.
+
+**3. Coverage table:** Sortable list of requirements with status badges, click-to-expand showing the full downstream chain.
+
+### M5c — Frontend component
+
+**`frontend/src/components/TraceabilityMatrix.jsx`** — mounted in the dashboard's "Traceability" tab. Tabs at the top: `Heatmap | Sankey | Coverage`. Filter controls: epic, status, quality score range.
+
+**SBERT augmentation:** Background call to `/api/ml/orphans/detect` — passes all requirements + all `project_files` content, returns suspected mismatches:
+- Requirements with `linked_cards=[]` but the LLM auto-suggests "REQ-7 looks similar to FILE-3's content (cosine 0.72) — maybe link?"
+- Files with no card link
+- A "Suggested Links" panel below the matrix; user clicks "Confirm" → `linkArtifacts(... confidence=0.72)`
+
+**Acceptance:**
+- Open Traceability tab → matrix renders with real coverage
+- Unimplemented requirements show as red rows
+- Click any REQ → drawer shows the full chain (REQ → cards → files → tests + statuses)
+- "Suggested Links" panel surfaces SBERT augmentations from M6 (once M6 ships)
+
+---
+
+# DAY 4 — ML Defect, Layer 3 GenAI, Polish
+
+## M6 — Code Intelligence: Defect Predictor + SBERT Orphan Detection (~2.5h)
+
+Implements [2026-05-21-code-intelligence-panel-design.md](2026-05-21-code-intelligence-panel-design.md) — **scoped down**: structured traceability already lives in M4/M4.5/M5, so this milestone delivers (a) the ML defect predictor and (b) SBERT-based **orphan detection** as augmentation on top of the structured links.
+
+### M6a — Train defect model (~1h)
+
+- `ml-service/code_intel/train_defect_model.py`
+  - Downloads PROMISE ARFF (kc1, kc2, pc1) from `klainfo/DefectData`
+  - Trains `RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)` on 5 features: CC, Halstead Volume, Halstead Effort, LOC, n_functions
+  - Saves `defect_rf_v1.joblib` + `model_metadata.json` (AUC, F1, P, R)
+  - Synthetic 50-row fallback if download fails
+- Run once at setup: `cd ml-service && python -m code_intel.train_defect_model`
+
+### M6b — Defect inference endpoint (~45min)
+
+- `ml-service/code_intel/radon_features.py` — Python: real radon; JS/other: regex CC approximation
+- `ml-service/code_intel/defect_predictor.py` — load joblib, `predict_proba`, SHAP TreeExplainer top-3 features
+- `ml-service/main.py` — `POST /code/defect/predict`
+- `backend/routes/ml.js` — `POST /api/ml/defect/predict`
+- **Trigger:** runs automatically when a card's code is generated (M4c). Stores `defect_risk_score` directly on `project_files`. UI on the card drawer shows risk badge + SHAP factors.
+
+### M6c — SBERT orphan detection (~45min)
+
+- `ml-service/code_intel/orphan_detector.py` — SBERT-encode all `requirements` and `project_files`, cosine matrix, flag:
+  - Requirements with `linked_cards=[]` AND cosine to any file < 0.45 → confirmed orphan ("unimplemented")
+  - Files with cosine < 0.45 to any requirement → orphan code ("no stated requirement")
+  - Pairs with cosine > 0.65 but no structured link → "Suggested Link" (user can confirm)
+- `ml-service/main.py` — `POST /code/orphans/detect`
+- `backend/routes/ml.js` — `POST /api/ml/orphans/detect`
+- Surfaced in **M5's Traceability Matrix** "Suggested Links" panel
+
+**Acceptance:**
+- After code generation on a card, defect risk badge appears in the drawer
+- Click "Detect Orphans" on the Traceability tab → suggested links populate with confidence scores
+- Quality phase score on dashboard combines: test pass rate (60%) + (1 - avg defect risk) (40%)
+
+---
+
+## M7 — RAG Project Memory (~2h)
 
 **Files:**
 - `ml-service/rag/indexer.py` — chunks documents (SRS, design, code) into ~500-token windows, SBERT-encodes, stores in `ml_results` (`result_type='rag_index'`, payload = `{chunks: [{text, vector_b64, source}]}`) **OR** a separate `rag_chunks` table — pick the table approach for clarity:
@@ -474,7 +895,7 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
 
 ---
 
-## M6 — Multi-Agent Review + Adversarial Stress-Tester (~2h)
+## M8 — Multi-Agent Review + Adversarial Stress-Tester (~2h)
 
 Lives in Dashboard "Reviews" tab. Pure Node-side (no ml-service work) — three parallel Gemini calls.
 
@@ -506,9 +927,9 @@ app.post('/api/ml/reviews/run', requireAuth, async (req, res) => {
 
 ---
 
-## M7 — Demo Polish + Startup Script + Seed Project (~3h)
+## M9 — Demo Polish + Startup Script + Seed Project (~2h)
 
-### M7a — Unified startup script (~30min)
+### M9a — Unified startup script (~30min)
 
 **Create:** `scripts/start-all.sh`
 
@@ -529,7 +950,7 @@ cd frontend && npm run dev
 
 Plus `scripts/stop-all.sh` to kill background processes.
 
-### M7b — README rewrite (~30min)
+### M9b — README rewrite (~30min)
 
 Replace existing README with:
 - 30-second pitch: "AI-Software-Engineer is a full-SDLC autonomous workbench. Three intelligence layers..."
@@ -538,7 +959,7 @@ Replace existing README with:
 - Feature list with screenshots placeholders
 - Demo walkthrough script (10 steps)
 
-### M7c — Seed demo project (~1h)
+### M9c — Seed demo project (~1h)
 
 Add a "Create Demo Project" button on ProjectsDashboard that, in one click, creates a project with:
 - A pre-loaded SRS with intentional flaws (some vague terms, one conflict pair)
@@ -549,12 +970,12 @@ This means a demo can show all features without typing.
 
 Implementation: `POST /api/projects/seed-demo` endpoint that runs the inserts.
 
-### M7d — Loading skeletons & empty states (~1h)
+### M9d — Loading skeletons & empty states (~1h)
 
 Every ML panel currently renders nothing while loading. Add `<SkeletonRows count={N} />` shared component (uses `--bg-input` shimmer animation). Apply to:
 - Quality panel, Conflict panel, Code Intelligence panel, RAG chat, Reviews tab
 
-### M7e — End-to-end smoke pass
+### M9e — End-to-end smoke pass
 
 Walk through the demo script with all 4 ML services running. Fix anything that looks janky. Capture 3-5 screenshots for the README.
 
@@ -562,34 +983,75 @@ Walk through the demo script with all 4 ML services running. Fix anything that l
 
 ## Critical Files to Modify (summary table)
 
+### Frontend
+
 | File | Changes |
 |------|---------|
 | [frontend/src/main.jsx](frontend/src/main.jsx) | Import tokens.css, components.css; wrap App in AuthProvider |
-| [frontend/src/styles/tokens.css](frontend/src/styles/tokens.css) | **NEW** — design tokens |
-| [frontend/src/styles/components.css](frontend/src/styles/components.css) | **NEW** — shared btn/card/badge classes |
-| [frontend/src/lib/api.js](frontend/src/lib/api.js) | **NEW** — unified axios |
-| [frontend/src/contexts/AuthContext.jsx](frontend/src/contexts/AuthContext.jsx) | **NEW** |
-| [frontend/src/components/PhaseSidebar.jsx](frontend/src/components/PhaseSidebar.jsx) | **NEW** — integration spine |
-| [frontend/src/components/ProjectDashboard.jsx](frontend/src/components/ProjectDashboard.jsx) | Rename + rebuild UniversalHomePage |
-| [frontend/src/components/ConflictPanel.jsx](frontend/src/components/ConflictPanel.jsx) | **NEW** |
-| [frontend/src/components/CodeIntelligencePanel.jsx](frontend/src/components/CodeIntelligencePanel.jsx) | **NEW** |
-| [frontend/src/components/RagChat.jsx](frontend/src/components/RagChat.jsx) | **NEW** |
-| [frontend/src/components/AgentReviewsPanel.jsx](frontend/src/components/AgentReviewsPanel.jsx) | **NEW** |
-| [frontend/src/components/SRSEditor.jsx](frontend/src/components/SRSEditor.jsx) | Add Quality + Conflicts tabs |
-| [frontend/src/components/ValidationLab.jsx](frontend/src/components/ValidationLab.jsx) | Add Intelligence tab |
+| `frontend/src/styles/tokens.css` | **NEW** — design tokens |
+| `frontend/src/styles/components.css` | **NEW** — shared btn/card/badge classes |
+| `frontend/src/lib/api.js` | **NEW** — unified axios |
+| `frontend/src/contexts/AuthContext.jsx` | **NEW** |
+| `frontend/src/components/PhaseSidebar.jsx` | **NEW** — integration spine |
+| `frontend/src/components/ProjectDashboard.jsx` | Rename + rebuild from UniversalHomePage; three tabs: Overview · Traceability · Reviews |
+| `frontend/src/components/ImplementationBoard.jsx` | **NEW** — Kanban board, **replaces** ImplementationLab |
+| `frontend/src/components/CardDrawer.jsx` | **NEW** — card detail with code viewer, linked artifacts |
+| `frontend/src/components/TraceabilityMatrix.jsx` | **NEW** — heatmap/sankey/coverage views |
+| `frontend/src/components/ConflictPanel.jsx` | **NEW** — used inside SRSEditor |
+| `frontend/src/components/RagChat.jsx` | **NEW** |
+| `frontend/src/components/AgentReviewsPanel.jsx` | **NEW** |
+| [frontend/src/components/SRSEditor.jsx](frontend/src/components/SRSEditor.jsx) | Add Quality + Conflicts tabs; use REQ-N IDs everywhere |
+| [frontend/src/components/ValidationLab.jsx](frontend/src/components/ValidationLab.jsx) | Restructure: Tests tab (per-card), Intelligence tab, Coverage tab |
 | [frontend/src/components/ProjectLayout.jsx](frontend/src/components/ProjectLayout.jsx) | Mount PhaseSidebar |
-| All `*.css` in components/ | Replace hex codes with tokens |
-| [backend/server.js](backend/server.js) | Reduce to slim bootstrap |
-| `backend/routes/*.js` | **NEW** — split from server.js |
-| `backend/middleware/requireAuth.js` | **NEW** — moved from server.js |
+| [frontend/src/components/ImplementationLab.jsx](frontend/src/components/ImplementationLab.jsx) | **DELETE** (replaced by ImplementationBoard) |
+| All component `*.css` | Replace hex codes with tokens |
+
+### Backend
+
+| File | Changes |
+|------|---------|
+| [backend/server.js](backend/server.js) | Reduce to slim bootstrap (~150 lines) |
+| `backend/routes/auth.js` | **NEW** — extracted |
+| `backend/routes/projects.js` | **NEW** — extracted + adds `/health`, `/activity`, `/traceability` |
+| `backend/routes/srs.js` | **NEW** — extracted + parses requirements into `requirements` table on save |
+| `backend/routes/design.js` | **NEW** — extracted + extracts components into `design_components` table |
+| `backend/routes/code.js` | **NEW** — extracted (translate, review utilities only — generation moves to implementation routes) |
+| `backend/routes/implementation.js` | **NEW** — `/breakdown`, `/cards/:id/generate-code`, `/cards/:id/generate-tests`, `/tests/run`, card CRUD |
+| `backend/routes/documents.js` | **NEW** — extracted extract-text |
+| `backend/routes/ml.js` | **NEW** — all `/api/ml/*` proxy routes |
+| `backend/middleware/requireAuth.js` | **NEW** |
 | `backend/middleware/errorHandler.js` | **NEW** |
+| `backend/services/llm.js` | Keep, extend prompts |
 | `backend/services/mlClient.js` | **NEW** — proxy + health poll |
 | `backend/services/cache.js` | **NEW** — DB-backed fallback reads |
-| `backend/db/schema.js` | **NEW** — central CREATE TABLE incl. `ml_results`, `rag_chunks` |
-| `backend/routes/ml.js` | **NEW** — all `/api/ml/*` proxy routes |
-| `backend/prompts/agents/*.txt` | **NEW** — architect, security, performance, adversarial personas |
-| `ml-service/**` | **NEW** — entire FastAPI tree as above |
-| `scripts/start-all.sh` | **NEW** |
+| `backend/services/artifacts.js` | **NEW** — issueId, linkArtifacts, getLinks, getCoverage |
+| `backend/db/schema.js` | **NEW** — central CREATE TABLE: `ml_results`, `rag_chunks`, `artifact_counters`, `requirements`, `design_components`, `traceability_links`, `implementation_cards`, `project_files`, `test_cases` |
+| `backend/prompts/breakdown.txt` | **NEW** — design → epics/cards |
+| `backend/prompts/generate-card-code.txt` | **NEW** — design-aware code-gen |
+| `backend/prompts/generate-card-tests.txt` | **NEW** — test gen with req context |
+| `backend/prompts/agents/*.txt` | **NEW** — architect, security, performance, adversarial |
+
+### ML Service
+
+| File | Purpose |
+|------|---------|
+| `ml-service/main.py` | FastAPI app with lifespan warmup |
+| `ml-service/requirements.txt` | fastapi, uvicorn, spacy, sentence-transformers, scikit-learn, shap, radon, networkx, numpy |
+| `ml-service/schemas.py` | All Pydantic request/response models |
+| `ml-service/shared/spacy_loader.py`, `model_cache.py` | Singletons reused across features |
+| `ml-service/nlp/requirements_analyzer.py` | M2 |
+| `ml-service/nlp/conflict_detector.py`, `negation_analyzer.py` | M3 |
+| `ml-service/code_intel/defect_predictor.py`, `radon_features.py` | M6a/b |
+| `ml-service/code_intel/orphan_detector.py` | M6c |
+| `ml-service/code_intel/train_defect_model.py` | One-shot training |
+| `ml-service/rag/indexer.py`, `retriever.py` | M7 |
+| `ml-service/scripts/download_models.sh` | spaCy + SBERT idempotent download |
+
+### Repo root
+
+| File | Changes |
+|------|---------|
+| `scripts/start-all.sh`, `stop-all.sh` | **NEW** — orchestrated startup |
 | `.env.example` | **NEW** |
 | `README.md` | Rewrite |
 
@@ -623,13 +1085,20 @@ Walk through the demo script with all 4 ML services running. Fix anything that l
 - Dashboard at `/projects/:id` shows updated scores in phase cards
 
 ### After Day 3
-- ValidationLab → Intelligence tab → paste high-CC Python → defect badge shows "High Risk" with SHAP top-3
-- Same paste with SRS requirements in context → traceability matrix renders with coverage_pct
-- Stop ml-service → both panels show 503 with last cached result from DB (not in-memory)
+- `/implementation` route shows the Kanban Board (old ImplementationLab gone)
+- Click "Generate Implementation Cards" → 3-6 epics with cards appear within 10s, each linked to specific REQ-N IDs
+- Click a card → drawer shows linked requirements as chips (clickable)
+- Click "Generate Code" → code appears + `project_files` row + link recorded
+- Click "Generate Tests" → `test_cases` rows appear, each test traces back to a card → requirement
+- Run tests → ValidationLab Tests tab shows pass/fail with full trace (`TEST-2 → CARD-1 → REQ-4`)
+- Open Dashboard → Traceability tab → matrix shows REQ rows × CARD cols with colored cells; orphans flagged
+- Quality phase score on dashboard updates based on test pass rate
 
 ### After Day 4
+- After card code generation, defect risk badge appears on card with SHAP top-3 factors
+- Click "Detect Orphans" on Traceability tab → SBERT-suggested links surface in "Suggested Links" panel
 - Click "Run AI Review" → 4 agent cards populate in <8s
-- RAG chat → "Which requirement is unimplemented?" returns answer citing SRS line numbers
+- RAG chat → "Which requirement is unimplemented?" returns answer citing REQ-N IDs + filename evidence
 - `bash scripts/start-all.sh` from clean clone → all services up in <60s (models cached after first run)
 - Walk through README demo script start-to-finish without any console errors
 
@@ -644,7 +1113,10 @@ Walk through the demo script with all 4 ML services running. Fix anything that l
 | Gemini rate limits during demo | `services/llm.js` already falls back to Groq; add `GROQ_API_KEY` to `.env` ahead of demo day |
 | Backend refactor breaks existing routes | Each route module migrated incrementally with a smoke test before deleting from server.js |
 | SBERT model 80MB inflates repo if committed | Add `ml-service/model_cache/` and `*.joblib` to `.gitignore`; `download_models.sh` is idempotent |
-| Day 3 (M4) is the biggest single item | If running tight, ship M4a+M4b+M4d only and stub traceability (M4c) as "coming soon" — defect predictor alone is enough wow |
+| Day 3 (M4 Board) is the biggest single item | If running tight, ship M4a-c only (board + breakdown + code-gen), defer drag-and-drop reordering to Day 4 polish |
+| Test execution flakiness on demo | Default to AI-evaluated tests (Gemini scores pass/fail from reading the test+code). Real pytest execution is opt-in via a "Run with pytest" toggle |
+| LLM hallucinated REQ-N IDs in card breakdown | Validate against `requirements` table on insert; reject cards that reference non-existent IDs and re-prompt once |
+| Card breakdown produces too few or too many cards | Prompt explicitly asks for "vertical-slice scope, 8-15 cards total across 3-6 epics"; user can re-run or manually add/edit cards |
 
 ---
 

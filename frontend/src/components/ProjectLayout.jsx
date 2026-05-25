@@ -1,11 +1,10 @@
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { ProjectProvider } from './ProjectContext';
+import PhaseSidebar from './PhaseSidebar';
 import ProjectSidebar from './ProjectSidebar';
 import './WorkspaceLayout.css';
-
-axios.defaults.withCredentials = true;
 
 export default function ProjectLayout() {
   const { projectId } = useParams();
@@ -25,7 +24,7 @@ export default function ProjectLayout() {
 
       try {
         setLoading(true);
-        const response = await axios.get(`/api/project/${projectId}`);
+        const response = await api.get(`/project/${projectId}`);
         if (response.data) {
           setProjectName(response.data.title || response.data.name || '');
           setNotFound(false);
@@ -111,7 +110,10 @@ export default function ProjectLayout() {
             <div className="workspace-content">
               <Outlet />
             </div>
-            <ProjectSidebar />
+            <div>
+              <PhaseSidebar />
+              <ProjectSidebar />
+            </div>
           </div>
         </div>
       </div>

@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 import './UniversalHomePage.css';
-
-axios.defaults.withCredentials = true;
 
 export default function UniversalHomePage() {
   const navigate = useNavigate();
@@ -20,7 +18,7 @@ export default function UniversalHomePage() {
 
     const loadProject = async () => {
       try {
-        const response = await axios.get(`/api/project/${projectId}`);
+          const response = await api.get(`/project/${projectId}`);
         if (response.data) {
           setProjectName(response.data.title || response.data.name || '');
           setProjectNotFound(false);

@@ -20,6 +20,7 @@ export default function ProjectSidebar() {
     isSidebarCollapsed,
     setIsSidebarCollapsed,
     projectName,
+    documentsLoading,
   } = useProjectContext();
   const [previewDoc, setPreviewDoc] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -31,7 +32,7 @@ export default function ProjectSidebar() {
     if (!file) return;
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError('File too large for local storage. Please upload a file under ~2.5MB.');
+      setError('File too large. Please upload a file under ~2.5MB.');
       if (uploadRef.current) uploadRef.current.value = '';
       return;
     }
@@ -126,9 +127,15 @@ export default function ProjectSidebar() {
 
             <div className="sidebar-documents-section">
               <div className="sidebar-section-title">Project Documents</div>
-              {documents.length === 0 && (
+              {documentsLoading && (
                 <div className="sidebar-empty-state">
-                  <div className="sidebar-empty-icon">📁</div>
+                  <div className="sidebar-empty-icon">...</div>
+                  <p>Loading project documents...</p>
+                </div>
+              )}
+              {!documentsLoading && documents.length === 0 && (
+                <div className="sidebar-empty-state">
+                  <div className="sidebar-empty-icon">+</div>
                   <p>Nothing saved yet. Generate or upload to see items here.</p>
                 </div>
               )}
@@ -245,7 +252,7 @@ export default function ProjectSidebar() {
               <button
                 className="modal-button-delete"
                 onClick={() => {
-                  removeDocument(confirmDelete.id);
+                  removeDocument(confirmDelete.id).catch((err) => setError(err.message || 'Delete failed'));
                   setConfirmDelete(null);
                 }}
               >

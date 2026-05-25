@@ -1,10 +1,23 @@
 # Project Setup
 
-This repository contains the frontend and backend skeleton for the project.
+This repository contains one backend app and one frontend app:
+
+- `backend/` - Express API, SQLite database, LLM/document services
+- `frontend/` - React/Vite UI
 
 ## Getting Started
 
-### Backend
+From the repository root:
+
+```bash
+npm run install:all
+npm run dev:backend
+npm run dev:frontend
+```
+
+The backend runs on port 4000 by default. The frontend dev server proxies `/api` requests to the backend.
+
+### Backend Only
 
 ```bash
 cd backend
@@ -12,9 +25,7 @@ npm install
 npm run start
 ```
 
-The backend server runs on port 4000 by default.
-
-### Frontend
+### Frontend Only
 
 ```bash
 cd frontend

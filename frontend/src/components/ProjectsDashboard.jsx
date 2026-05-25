@@ -1,36 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import './ProjectsDashboard.css';
-
-axios.defaults.withCredentials = true;
 
 export default function ProjectsDashboard() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [projects, setProjects] = useState([]);
   const [newProjectName, setNewProjectName] = useState('');
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    loadUser();
     loadProjects();
   }, []);
 
-  const loadUser = async () => {
-    try {
-      const response = await axios.get('/api/auth/me');
-      setUser(response.data.user);
-    } catch (error) {
-      console.error('Failed to load user:', error);
-    }
-  };
-
   const handleLogout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await logout();
       navigate('/auth');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -42,7 +31,7 @@ export default function ProjectsDashboard() {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get('/api/projects');
+      const response = await api.get('/projects');
       setProjects(response.data || []);
     } catch (error) {
       console.error('Failed to load projects:', error);
@@ -67,7 +56,7 @@ export default function ProjectsDashboard() {
 
     try {
       setError('');
-      const response = await axios.post('/api/project', {
+      const response = await api.post('/project', {
         title: trimmed,
         project_text: ''
       });
@@ -85,7 +74,7 @@ export default function ProjectsDashboard() {
 
     try {
       setError('');
-      await axios.delete(`/api/project/${deleteTarget.id}`);
+      await api.delete(`/project/${deleteTarget.id}`);
       setProjects(projects.filter((p) => p.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (error) {

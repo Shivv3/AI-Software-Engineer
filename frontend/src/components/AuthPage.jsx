@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 import './AuthPage.css';
-
-axios.defaults.withCredentials = true;
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const { login, register } = useAuth();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,12 +45,12 @@ export default function AuthPage() {
     setError('');
 
     try {
-      const response = await axios.post('/api/auth/login', {
+      const response = await login({
         user_id: loginData.user_id,
         password: loginData.password
       });
 
-      if (response.data.success) {
+      if (response.success) {
         navigate('/');
       }
     } catch (err) {
@@ -80,7 +79,7 @@ export default function AuthPage() {
     }
 
     try {
-      const response = await axios.post('/api/auth/register', {
+      const response = await register({
         name: registerData.name,
         email: registerData.email,
         user_id: registerData.user_id,
@@ -89,7 +88,7 @@ export default function AuthPage() {
         age: registerData.age ? parseInt(registerData.age) : null
       });
 
-      if (response.data.success) {
+      if (response.success) {
         navigate('/');
       }
     } catch (err) {

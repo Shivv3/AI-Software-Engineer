@@ -7,10 +7,16 @@ const bodyParser = require('body-parser');
 const fs = require('fs').promises;
 const Ajv = require('ajv');
 const { Document, Packer, Paragraph } = require('docx');
-const Database = require('better-sqlite3');
+const db = require('./db');
 const llm = require('./services/llm');
 const session = require('express-session');
 const crypto = require('crypto');
+const requireAuth = require('./middleware/requireAuth');
+const createProjectDocumentsRouter = require('./routes/projectDocuments');
+const createProjectInsightsRouter = require('./routes/projectInsights');
+const { extractJson, parseLLMJson, formatContextBlock } = require('./services/llmUtils');
+const { loadPrompt } = require('./services/prompts');
+const { syncRequirementsFromText } = require('./services/artifacts');
 
 // Document parsing libraries - using dynamic imports for ESM modules
 let pdfParseModule;
@@ -40,49 +46,6 @@ const app = express();
 const port = process.env.PORT || 4000;
 const ajv = new Ajv();
 
-// Helper: extract likely JSON from LLM responses (handles ```json fences and extra text)
-function extractJson(rawText = '') {
-  if (!rawText) return rawText;
-  const fenced = rawText.match(/```json([\s\S]*?)```/i);
-  if (fenced && fenced[1]) {
-    return fenced[1].trim();
-  }
-  const firstBrace = rawText.indexOf('{');
-  const lastBrace = rawText.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    return rawText.slice(firstBrace, lastBrace + 1);
-  }
-  return rawText.trim();
-}
-
-// Parse JSON from LLM output with a light repair pass for stray backslashes
-function parseLLMJson(rawText) {
-  const extracted = extractJson(rawText);
-  try {
-    return JSON.parse(extracted);
-  } catch (err) {
-    // Attempt a minimal repair: escape lone backslashes not followed by valid escape chars
-    try {
-      const repaired = extracted.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
-      return JSON.parse(repaired);
-    } catch (err2) {
-      // Bubble the original error for clearer debugging
-      throw err;
-    }
-  }
-}
-
-// Normalize optional context input for prompts
-function formatContextBlock(context) {
-  if (!context) return '(none provided)';
-  if (typeof context === 'string') return context;
-  try {
-    return JSON.stringify(context, null, 2);
-  } catch {
-    return String(context);
-  }
-}
-
 // Enable CORS
 app.use((req, res, next) => {
   const origin = req.headers.origin || '*';
@@ -96,140 +59,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Authentication middleware
-function requireAuth(req, res, next) {
-  if (req.session && req.session.userId) {
-    return next();
-  }
-  return res.status(401).json({ error: 'Authentication required' });
-}
-
-// Database setup
-const dbPath = path.resolve(__dirname, process.env.DB_PATH || './data/db.sqlite');
-console.log('Using database at:', dbPath);
-
-// Create data directory if it doesn't exist
-const dataDir = path.dirname(dbPath);
-if (!require('fs').existsSync(dataDir)) {
-  require('fs').mkdirSync(dataDir, { recursive: true });
-}
-
-const db = new Database(dbPath);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    user_id TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    phone_number TEXT,
-    age INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    title TEXT,
-    project_text TEXT,
-    sdlc_analysis JSON,
-    project_plan JSON,
-    srs_content TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS srs_versions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id TEXT,
-    version INTEGER,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    editor TEXT CHECK(editor IN ('user', 'assistant')),
-    srs_content TEXT,
-    prompt_text TEXT,
-    suggestion_text TEXT,
-    selection_start INTEGER,
-    selection_end INTEGER,
-    FOREIGN KEY(project_id) REFERENCES projects(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id TEXT,
-    endpoint TEXT,
-    prompt TEXT,
-    raw_response TEXT,
-    parsed_response JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-// Database migration: Add user_id column to projects table if it doesn't exist
-console.log('Checking database schema...');
-try {
-  // Check if projects table exists
-  const tableExists = db.prepare(`
-    SELECT name FROM sqlite_master WHERE type='table' AND name='projects'
-  `).get();
-  
-  if (tableExists) {
-    const tableInfo = db.prepare(`PRAGMA table_info(projects)`).all();
-    const columnNames = tableInfo.map(col => col.name);
-    const hasUserIdColumn = columnNames.includes('user_id');
-    
-    console.log('Current projects table columns:', columnNames.join(', '));
-    
-    if (!hasUserIdColumn) {
-      console.log('⚠️  Migrating database: Adding user_id column to projects table...');
-      
-      // Disable foreign key constraints temporarily
-      db.exec(`PRAGMA foreign_keys = OFF`);
-      
-      try {
-        // Delete related records first (srs_versions, logs, etc.)
-        try {
-          const deleteVersions = db.prepare(`DELETE FROM srs_versions`);
-          deleteVersions.run();
-        } catch (e) {
-          // Table might not exist, ignore
-        }
-        
-        try {
-          const deleteLogs = db.prepare(`DELETE FROM logs`);
-          deleteLogs.run();
-        } catch (e) {
-          // Table might not exist, ignore
-        }
-        
-        // Delete all existing projects since they don't have user associations
-        const deleteStmt = db.prepare(`DELETE FROM projects`);
-        const result = deleteStmt.run();
-        console.log(`Deleted ${result.changes} existing projects without user associations.`);
-        
-        // Add user_id column
-        db.exec(`ALTER TABLE projects ADD COLUMN user_id TEXT`);
-        
-        // Re-enable foreign key constraints
-        db.exec(`PRAGMA foreign_keys = ON`);
-        
-        console.log('✅ Database migration completed successfully. user_id column added.');
-      } catch (migrationError) {
-        console.error('❌ Migration error:', migrationError.message);
-        // Re-enable foreign keys even if migration failed
-        db.exec(`PRAGMA foreign_keys = ON`);
-        throw migrationError;
-      }
-    } else {
-      console.log('✅ Database schema is up to date. user_id column exists.');
-    }
-  } else {
-    console.log('Projects table does not exist yet. It will be created with user_id column.');
-  }
-} catch (error) {
-  console.error('❌ Database migration error:', error);
-  console.error('Stack trace:', error.stack);
-  // Don't throw - allow server to start, but log the error clearly
-}
+console.log('Database schema initialized safely.');
 
 // Password hashing helper functions
 function hashPassword(password) {
@@ -259,11 +89,6 @@ app.use(session({
 // Load schemas
 const sdlcSchema = require('./schemas/sdlc_recommendation.schema.json');
 const planSchema = require('./schemas/plan_requirements.schema.json');
-
-// Load prompts
-async function loadPrompt(filename) {
-  return await fs.readFile(path.join(__dirname, 'prompts', filename), 'utf-8');
-}
 
 // LLM wrapper
 async function callLLM(promptText) {
@@ -311,6 +136,8 @@ async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedRe
 // Endpoints
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api/projects/:projectId/documents', createProjectDocumentsRouter(db));
+app.use(createProjectInsightsRouter(db));
 
 // Authentication endpoints
 app.post('/api/auth/register', async (req, res) => {
@@ -935,12 +762,13 @@ app.post('/api/srs/apply', async (req, res) => {
     // Start transaction
     db.transaction(() => {
       // Update project's current SRS content
-      db.prepare(`
-        UPDATE projects 
-        SET srs_content = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(srs_content, project_id);
+    db.prepare(`
+      UPDATE projects 
+      SET srs_content = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(srs_content, project_id);
+    syncRequirementsFromText(db, project_id, srs_content, 'srs');
 
       // Create new version record
       db.prepare(`
@@ -1321,6 +1149,7 @@ app.post('/api/srs/generate-final/:project_id', async (req, res) => {
       SET srs_content = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(finalContent, req.params.project_id);
+    syncRequirementsFromText(db, req.params.project_id, finalContent, 'srs');
 
     res.json({ 
       content: finalContent,

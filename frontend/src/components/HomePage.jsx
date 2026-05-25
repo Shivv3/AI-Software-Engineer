@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../lib/api';
 import ResultsPanel from './ResultsPanel';
 import { useProjectContext } from './ProjectContext';
 import './HomePage.css';
@@ -111,7 +111,7 @@ export default function HomePage() {
     }
     try {
       setLoading(prev => ({ ...prev, sdlc: true }));
-      const response = await axios.post('/api/sdlc/recommend', {
+      const response = await api.post('/sdlc/recommend', {
         project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         constraints: {
           team_size: parseInt(projectData.teamSize) || 1,
@@ -144,7 +144,7 @@ export default function HomePage() {
     }
     try {
       setLoading(prev => ({ ...prev, plan: true }));
-      const response = await axios.post('/api/plan/generate', {
+      const response = await api.post('/plan/generate', {
         project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         title: projectData.title || 'Untitled Project',
         team_size: parseInt(projectData.teamSize) || 1,
@@ -176,7 +176,7 @@ export default function HomePage() {
     }
     try {
       setLoading(prev => ({ ...prev, requirements: true }));
-      const response = await axios.post('/api/plan/generate', {
+      const response = await api.post('/plan/generate', {
         project_text: `${projectData.description}\n\n${contextDocs.length ? 'Context:\n' + getContextText() : ''}`,
         title: projectData.title || 'Untitled Project',
         team_size: parseInt(projectData.teamSize) || 1,

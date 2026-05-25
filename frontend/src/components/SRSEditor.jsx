@@ -2,7 +2,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import axios from 'axios';
+import api from '../lib/api';
 import { useProjectContext } from './ProjectContext';
 import './SRSEditor.css';
 
@@ -69,7 +69,7 @@ export default function SRSEditor() {
       setGenerateLoading(true);
       
       // Create project
-      const projectRes = await axios.post('/api/project', {
+      const projectRes = await api.post('/project', {
         title: 'SRS Project',
         project_text: projectDescription
       });
@@ -77,7 +77,7 @@ export default function SRSEditor() {
       setProjectId(projectRes.data.id);
       
       // Generate questions
-      const questionsRes = await axios.post('/api/srs/generate-questions', {
+      const questionsRes = await api.post('/srs/generate-questions', {
         project_description: projectDescription
       });
       
@@ -145,7 +145,7 @@ export default function SRSEditor() {
         answer: subsectionAnswers[index] || ''
       }));
 
-      const response = await axios.post('/api/srs/generate-content', {
+      const response = await api.post('/srs/generate-content', {
         section_title: srsStructure[currentSectionIndex].section_title,
         subsection_title: subsection.subsection_title,
         qa_pairs: qaPairs
@@ -173,7 +173,7 @@ export default function SRSEditor() {
         status: 'approved'
       };
       
-      await axios.post('/api/srs/save-section', saveData);
+      await api.post('/srs/save-section', saveData);
 
       const sectionKey = `${srsStructure[currentSectionIndex].section_id.replace(/\./g, '_')}_${subsection.subsection_id.replace(/\./g, '_')}`;
       setSavedSections(prev => [...prev.filter(s => s !== sectionKey), sectionKey]);
@@ -218,7 +218,7 @@ export default function SRSEditor() {
 
   const generateFinalSRS = async () => {
     try {
-      const response = await axios.post(`/api/srs/generate-final/${projectId}`);
+      const response = await api.post(`/srs/generate-final/${projectId}`);
       setFinalSrsContent(response.data.content);
       setSrsStatus(prev => ({
         ...prev,
@@ -235,11 +235,11 @@ export default function SRSEditor() {
     if (!projectId) return;
     
     try {
-      const response = await axios.get(`/api/srs/status/${projectId}`);
+      const response = await api.get(`/srs/status/${projectId}`);
       setSrsStatus(response.data);
       
       // Also generate current SRS content
-      const srsResponse = await axios.post(`/api/srs/generate-final/${projectId}`);
+      const srsResponse = await api.post(`/srs/generate-final/${projectId}`);
       setFinalSrsContent(srsResponse.data.content);
     } catch (error) {
       console.error('Error loading SRS status:', error);
@@ -256,7 +256,7 @@ export default function SRSEditor() {
       await generateFinalSRS();
       
       // Then export it
-      const response = await axios.post(`/api/project/${projectId}/export`, {}, {
+      const response = await api.post(`/project/${projectId}/export`, {}, {
         responseType: 'blob'
       });
       

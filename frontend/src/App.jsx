@@ -9,6 +9,7 @@ import DiagramGenerator from './components/DiagramGenerator';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import ProjectLayout from './components/ProjectLayout';
 import ImplementationLab from './components/ImplementationLab';
+import ProjectGenerator from './components/ProjectGenerator';
 import ValidationLab from './components/ValidationLab';
 import AuthPage from './components/AuthPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -37,6 +38,7 @@ function App() {
           <Route path="design/diagram" element={<DiagramGenerator />} />
           <Route path="srs-editor" element={<SRSEditor />} />
           <Route path="implementation" element={<ImplementationLab />} />
+          <Route path="generate" element={<ProjectGenerator />} />
           <Route path="quality" element={<ValidationLab />} />
         </Route>
       </Routes>

@@ -1,0 +1,5 @@
+# This directory stores SQLite database files
+# Database files are excluded from Git to prevent:
+# - Test data pollution
+# - Database lock conflicts
+# - Sensitive data leakage

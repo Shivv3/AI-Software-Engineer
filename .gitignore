@@ -27,3 +27,12 @@ venv/
 ml-service/venv/
 __pycache__/
 *.pyc
+
+# Database files - prevent test data and locks from being committed
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+backend/data/*
+!backend/data/.gitkeep

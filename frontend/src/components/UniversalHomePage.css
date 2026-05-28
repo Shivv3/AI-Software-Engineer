@@ -138,6 +138,7 @@
 .phase-card:nth-child(2) { animation-delay: 0.2s; }
 .phase-card:nth-child(3) { animation-delay: 0.3s; }
 .phase-card:nth-child(4) { animation-delay: 0.4s; }
+.phase-card:nth-child(5) { animation-delay: 0.5s; }
 
 .phase-card::before {
   content: '';
@@ -161,6 +162,10 @@
 
 .phase-card.phase-implementation::before {
   background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
+}
+
+.phase-card.phase-generate::before {
+  background: linear-gradient(90deg, #14b8a6 0%, #3b82f6 100%);
 }
 
 .phase-card.phase-testing::before {
@@ -200,6 +205,11 @@
 
 .phase-card.phase-implementation:hover .phase-card-glow {
   background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%);
+  opacity: 1;
+}
+
+.phase-card.phase-generate:hover .phase-card-glow {
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.1) 0%, transparent 70%);
   opacity: 1;
 }
 
@@ -247,6 +257,12 @@
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.3);
   color: #fcd34d;
+}
+
+.phase-badge-generate {
+  background: rgba(20, 184, 166, 0.15);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  color: #5eead4;
 }
 
 .phase-badge-testing {

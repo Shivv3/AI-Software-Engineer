@@ -162,6 +162,17 @@ export default function SystemDesignWizard() {
 
       const data = await response.json();
       setDesignResult(data);
+      const dateTag = new Date().toISOString().split('T')[0];
+      await addDocument({
+        name: `System Design ${dateTag}`,
+        type: 'system_design',
+        mime: 'application/json',
+        content: JSON.stringify(data, null, 2),
+        useAsContext: true,
+        createdAt: new Date().toISOString(),
+      });
+      setSaveMessage('System design auto-saved to sidebar for code generation.');
+      setTimeout(() => setSaveMessage(''), 4000);
       setProcessingStatus('');
       setActiveTab('high_level_design');
     } catch (err) {

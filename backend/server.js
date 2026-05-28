@@ -121,7 +121,7 @@ async function callLLM(promptText, options = {}) {
 app.get('/api/llm/status', (req, res) => {
   try {
     const status = llm.getStatus();
-    res.json({ providers: status });
+    res.json({ providers: status, keyPools: llm.getKeyPoolStatus?.() || {} });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -177,6 +177,140 @@ function buildContextText(docs, maxChars = 12000) {
     total += block.length;
   }
   return blocks.join('\n\n');
+}
+
+function sendSSE(res, type, data = {}) {
+  res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+}
+
+function stripCodeFence(text) {
+  const raw = String(text || '').trim();
+  const fenced = raw.match(/^```[\w-]*\s*\n?([\s\S]*?)\n?```\s*$/);
+  return fenced ? fenced[1].trim() : raw;
+}
+
+function parseManifest(rawText) {
+  const text = stripCodeFence(rawText);
+  const firstBracket = text.indexOf('[');
+  const lastBracket = text.lastIndexOf(']');
+  if (firstBracket === -1 || lastBracket === -1 || lastBracket <= firstBracket) {
+    throw new Error('The model did not return a JSON file manifest array.');
+  }
+
+  const parsed = JSON.parse(text.slice(firstBracket, lastBracket + 1));
+  if (!Array.isArray(parsed)) {
+    throw new Error('The generated file manifest is not an array.');
+  }
+
+  return parsed.map((entry, index) => {
+    const normalized = {
+      path: String(entry.path || '').replace(/\\/g, '/').replace(/^\/+/, '').trim(),
+      purpose: String(entry.purpose || '').trim(),
+      component: String(entry.component || '').trim(),
+      language: String(entry.language || '').trim(),
+      type: String(entry.type || 'source').trim().toLowerCase(),
+    };
+
+    if (!normalized.path || !normalized.purpose || !normalized.component || !normalized.language) {
+      throw new Error(`Invalid manifest entry at index ${index}. Each entry needs path, purpose, component, and language.`);
+    }
+    if (normalized.path.includes('..')) {
+      throw new Error(`Unsafe manifest path rejected: ${normalized.path}`);
+    }
+    if (!['source', 'test', 'config', 'documentation'].includes(normalized.type)) {
+      normalized.type = normalized.component.toLowerCase().includes('test') ? 'test' : 'source';
+    }
+    return normalized;
+  });
+}
+
+function extractCode(rawText) {
+  const text = stripCodeFence(rawText);
+  return text.trim() ? text.trim() : null;
+}
+
+function tryParseJson(value) {
+  if (!value || typeof value !== 'string') return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    try {
+      return parseLLMJson(value);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function extractSchemaFromDocuments(docs) {
+  const schemaDocs = docs.filter((doc) => {
+    const type = String(doc.type || '').toLowerCase();
+    const name = String(doc.name || '').toLowerCase();
+    const content = String(doc.content || '');
+    return type.includes('schema') || name.includes('schema') || /\bCREATE\s+TABLE\b/i.test(content);
+  });
+
+  for (const doc of schemaDocs) {
+    const parsed = tryParseJson(doc.content);
+    if (parsed?.ddl_sql) return parsed.ddl_sql;
+    const content = String(doc.content || '');
+    const fencedSql = content.match(/```sql\s*([\s\S]*?)```/i);
+    if (fencedSql) return fencedSql[1].trim();
+    if (/\bCREATE\s+TABLE\b/i.test(content)) return content.trim();
+  }
+  return '';
+}
+
+function extractEntitiesFromDocuments(docs, schemaText) {
+  const entities = new Set();
+
+  String(schemaText || '').replace(/\bCREATE\s+TABLE\s+["`[]?([A-Za-z_][A-Za-z0-9_]*)/gi, (_m, name) => {
+    entities.add(name);
+    return _m;
+  });
+
+  docs.forEach((doc) => {
+    const parsed = tryParseJson(doc.content);
+    if (Array.isArray(parsed?.entities)) {
+      parsed.entities.forEach((entity) => {
+        if (entity?.name) entities.add(entity.name);
+      });
+    }
+
+    const content = String(doc.content || '');
+    if (/erDiagram/i.test(content)) {
+      content.replace(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{/gm, (_m, name) => {
+        entities.add(name);
+        return _m;
+      });
+    }
+  });
+
+  return Array.from(entities);
+}
+
+function getProjectContextArtifacts(projectId) {
+  const docs = db.prepare(`
+    SELECT id, name, type, content, updated_at
+    FROM project_documents
+    WHERE project_id = ?
+    ORDER BY updated_at DESC
+  `).all(projectId);
+  const existingSchema = extractSchemaFromDocuments(docs);
+  const entities = extractEntitiesFromDocuments(docs, existingSchema);
+  return { docs, existingSchema, entities };
+}
+
+async function runWithConcurrency(items, concurrency, worker) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index], index);
+    }
+  });
+  await Promise.all(workers);
 }
 
 // Logging helper
@@ -560,6 +694,146 @@ app.post('/api/code/generate', async (req, res) => {
   } catch (error) {
     console.error('Code generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate code' });
+  }
+});
+
+app.post('/api/code/generate-project', async (req, res) => {
+  const { project_id, design_document_id, tech_stack, manifest, preview_only } = req.body || {};
+
+  if (!project_id || !design_document_id || !tech_stack) {
+    return res.status(400).json({ error: 'project_id, design_document_id, and tech_stack are required' });
+  }
+
+  let closed = false;
+  req.on('aborted', () => {
+    closed = true;
+  });
+
+  try {
+    const project = db.prepare(`
+      SELECT id FROM projects WHERE id = ? AND user_id = ?
+    `).get(project_id, req.session.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const designDoc = db.prepare(`
+      SELECT id, name, type, content, updated_at
+      FROM project_documents
+      WHERE id = ? AND project_id = ?
+    `).get(design_document_id, project_id);
+
+    if (!designDoc) {
+      return res.status(404).json({ error: 'Design document not found' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.on('close', () => {
+      if (!res.writableEnded) closed = true;
+    });
+
+    const { existingSchema, entities } = getProjectContextArtifacts(project_id);
+    const designJson = tryParseJson(designDoc.content) || {
+      name: designDoc.name,
+      type: designDoc.type,
+      content: designDoc.content,
+    };
+    let fileManifest = Array.isArray(manifest) ? parseManifest(JSON.stringify(manifest)) : null;
+
+    if (!fileManifest) {
+      sendSSE(res, 'manifest_start');
+      const manifestTemplate = await loadPrompt('project_manifest_prompt.txt');
+      const manifestPrompt = manifestTemplate
+        .replace('<<<DESIGN_JSON>>>', JSON.stringify(designJson, null, 2))
+        .replace('<<<TECH_STACK>>>', tech_stack)
+        .replace('<<<EXISTING_SCHEMA>>>', existingSchema || '(none provided)')
+        .replace('<<<ENTITIES>>>', entities.length ? JSON.stringify(entities, null, 2) : '(none provided)');
+
+      const rawManifest = await callLLM(manifestPrompt, { task: 'code' });
+      fileManifest = parseManifest(rawManifest);
+    }
+
+    sendSSE(res, 'manifest_done', { total: fileManifest.length, manifest: fileManifest });
+    if (preview_only) {
+      sendSSE(res, 'complete', { files: [], failed: [], manifest: fileManifest });
+      res.end();
+      return;
+    }
+
+    const fileTemplate = await loadPrompt('project_file_prompt.txt');
+    const files = [];
+    const failed = [];
+    const concurrency = Math.max(1, Math.min(Number(process.env.PROJECT_GENERATION_CONCURRENCY || 3), 6));
+
+    await runWithConcurrency(fileManifest, concurrency, async (entry, index) => {
+      if (closed) return;
+      sendSSE(res, 'file_start', {
+        index,
+        total: fileManifest.length,
+        path: entry.path,
+        language: entry.language,
+        component: entry.component,
+        fileType: entry.type,
+      });
+
+      try {
+        let code;
+        const normalizedPath = entry.path.toLowerCase().replace(/\\/g, '/');
+        if (normalizedPath.endsWith('/schema.sql') && existingSchema) {
+          code = existingSchema;
+        } else if (normalizedPath.endsWith('/migrations/001_initial.sql') && existingSchema) {
+          code = existingSchema;
+        } else {
+          const filePrompt = fileTemplate
+            .replace('<<<FILE_PATH>>>', entry.path)
+            .replace('<<<FILE_PURPOSE>>>', entry.purpose)
+            .replace('<<<FILE_LANGUAGE>>>', entry.language)
+            .replace('<<<FILE_TYPE>>>', entry.type)
+            .replace('<<<DESIGN_JSON>>>', JSON.stringify(designJson, null, 2))
+            .replace('<<<TECH_STACK>>>', tech_stack)
+            .replace('<<<EXISTING_SCHEMA>>>', existingSchema || '(none provided)')
+            .replace('<<<ENTITIES>>>', entities.length ? JSON.stringify(entities, null, 2) : '(none provided)');
+
+          const rawCode = await callLLM(filePrompt, { task: 'code' });
+          code = extractCode(rawCode);
+        }
+
+        if (!code) {
+          failed.push({ path: entry.path, error: 'Empty response' });
+          sendSSE(res, 'file_error', { index, path: entry.path, error: 'Empty response' });
+          return;
+        }
+
+        files[index] = { ...entry, code };
+        sendSSE(res, 'file_done', {
+          index,
+          path: entry.path,
+          language: entry.language,
+          component: entry.component,
+          fileType: entry.type,
+        });
+      } catch (error) {
+        failed.push({ path: entry.path, error: error.message });
+        sendSSE(res, 'file_error', { index, path: entry.path, error: error.message || 'Failed to generate file' });
+      }
+    });
+
+    if (!closed) {
+      const generatedFiles = files.filter(Boolean);
+      sendSSE(res, 'complete', { files: generatedFiles, failed });
+      res.end();
+    }
+  } catch (error) {
+    console.error('Project generation error:', error);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: error.message || 'Failed to generate project' });
+    }
+    sendSSE(res, 'error', { message: error.message || 'Failed to generate project' });
+    res.end();
   }
 });
 
@@ -1648,6 +1922,8 @@ app.post('/api/design/diagram', async (req, res) => {
   }
 });
 
+async function disabledDuplicateDiagramHandler() {
+  try {
     if (!diagram_type || typeof diagram_type !== 'string') {
       return res.status(400).json({ error: 'diagram_type is required and must be a string' });
     }
@@ -1962,7 +2238,7 @@ app.post('/api/design/diagram', async (req, res) => {
     console.error('Diagram generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate diagram' });
   }
-});
+}
 
 // ML/NLP routes
 app.post('/api/ml/requirements/analyze', async (req, res) => {

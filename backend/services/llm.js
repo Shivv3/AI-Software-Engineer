@@ -8,6 +8,64 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function readKeyPool(prefix, fallbackName) {
+    const keys = [];
+    const csv = process.env[`${prefix}S`];
+    if (csv) {
+        keys.push(...csv.split(',').map((key) => key.trim()).filter(Boolean));
+    }
+
+    for (let i = 1; i <= 10; i++) {
+        const key = process.env[`${prefix}_${i}`];
+        if (key && key.trim()) keys.push(key.trim());
+    }
+
+    const fallback = process.env[fallbackName || prefix];
+    if (keys.length === 0 && fallback && fallback.trim()) keys.push(fallback.trim());
+
+    return [...new Set(keys)];
+}
+
+class ApiKeyPool {
+    constructor(keys, cooldownMs = 60 * 1000) {
+        this.cooldownMs = cooldownMs;
+        this.entries = keys.map((value, index) => ({ index: index + 1, value, cooldownUntil: 0 }));
+        this.index = 0;
+    }
+
+    hasKeys() {
+        return this.entries.length > 0;
+    }
+
+    getNextKey() {
+        if (this.entries.length === 0) return null;
+        const now = Date.now();
+
+        for (let i = 0; i < this.entries.length; i++) {
+            const entry = this.entries[this.index % this.entries.length];
+            this.index += 1;
+            if (!entry.cooldownUntil || entry.cooldownUntil <= now) return entry;
+        }
+
+        return null;
+    }
+
+    markCooldown(entry, ms = this.cooldownMs) {
+        if (entry) entry.cooldownUntil = Date.now() + ms;
+    }
+
+    getStatus() {
+        const now = Date.now();
+        return this.entries.map((entry) => ({
+            index: entry.index,
+            cooldownUntil: entry.cooldownUntil > now ? new Date(entry.cooldownUntil).toISOString() : null,
+        }));
+    }
+}
+
+const geminiKeyPool = new ApiKeyPool(readKeyPool('GEMINI_API_KEY', 'GEMINI_API_KEY'));
+const groqKeyPool = new ApiKeyPool(readKeyPool('GROQ_API_KEY', 'GROQ_API_KEY'));
+
 class RateLimiter {
     constructor(maxRequests, timeWindowMs) {
         this.maxRequests = maxRequests;
@@ -32,7 +90,11 @@ class RateLimiter {
     }
 }
 
-const rateLimiter = new RateLimiter(30, 60 * 1000);
+const configuredKeyCount = Math.max(1, geminiKeyPool.entries.length + groqKeyPool.entries.length);
+const rateLimiter = new RateLimiter(
+    Number(process.env.LLM_RATE_LIMIT_PER_MINUTE || Math.max(30, configuredKeyCount * 12)),
+    60 * 1000
+);
 
 // ─── Provider Definitions ──────────────────────────────────────────────────────
 
@@ -59,21 +121,34 @@ const PROVIDERS = [
     // ── Gemini ──────────────────────────────────────────────────────────────
     {
         name: 'gemini',
-        available: () => !!process.env.GEMINI_API_KEY,
+        available: () => geminiKeyPool.hasKeys(),
         call: async (prompt) => {
+            const keyEntry = geminiKeyPool.getNextKey();
+            if (!keyEntry) {
+                const err = new Error('All Gemini API keys are cooling down');
+                err.code = 'ALL_KEYS_COOLDOWN';
+                throw err;
+            }
             const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-            const response = await axios.post(
-                url,
-                { contents: [{ parts: [{ text: prompt }] }] },
-                {
-                    headers: { 'Content-Type': 'application/json' },
-                    params: { key: process.env.GEMINI_API_KEY.trim() },
-                    timeout: 60000
+            try {
+                const response = await axios.post(
+                    url,
+                    { contents: [{ parts: [{ text: prompt }] }] },
+                    {
+                        headers: { 'Content-Type': 'application/json' },
+                        params: { key: keyEntry.value },
+                        timeout: 60000
+                    }
+                );
+                const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error('Invalid response format from Gemini API');
+                return text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+            } catch (err) {
+                if (err.response?.status === 429) {
+                    geminiKeyPool.markCooldown(keyEntry);
                 }
-            );
-            const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) throw new Error('Invalid response format from Gemini API');
-            return text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+                throw err;
+            }
         },
         isTransient: (err) => {
             const s = err.response?.status;
@@ -123,8 +198,14 @@ const PROVIDERS = [
     // ── Groq (multi-model rotation) ─────────────────────────────────────────
     {
         name: 'groq',
-        available: () => !!process.env.GROQ_API_KEY,
+        available: () => groqKeyPool.hasKeys(),
         call: async (prompt, _modelOverride) => {
+            const keyEntry = groqKeyPool.getNextKey();
+            if (!keyEntry) {
+                const err = new Error('All Groq API keys are cooling down');
+                err.code = 'ALL_KEYS_COOLDOWN';
+                throw err;
+            }
             // Groq supports model rotation — try each model in order
             const models = _modelOverride ? [_modelOverride] : GROQ_MODELS;
             let lastErr;
@@ -140,7 +221,7 @@ const PROVIDERS = [
                         },
                         {
                             headers: {
-                                'Authorization': `Bearer ${process.env.GROQ_API_KEY.trim()}`,
+                                'Authorization': `Bearer ${keyEntry.value}`,
                                 'Content-Type': 'application/json'
                             },
                             timeout: 60000
@@ -154,6 +235,10 @@ const PROVIDERS = [
                     lastErr = err;
                     const status = err.response?.status;
                     console.warn(`Groq model ${model} failed (status: ${status || err.code})`);
+                    if (status === 429) {
+                        groqKeyPool.markCooldown(keyEntry);
+                        throw err;
+                    }
                     // If auth error, no point trying other models — same key
                     if (status === 401 || status === 403) throw err;
                     // For rate limit or transient errors, try next model
@@ -204,7 +289,7 @@ const TASK_ROUTING = {
 
 class LLMService {
     constructor() {
-        this.apiKey = process.env.GEMINI_API_KEY; // kept for backwards compat checks
+        this.apiKey = geminiKeyPool.entries[0]?.value; // kept for backwards compat checks
         // Track provider health — temporarily skip providers with auth failures
         this._disabledProviders = new Map(); // name → re-enable timestamp
     }
@@ -224,6 +309,13 @@ class LLMService {
                 disabledUntil: isDisabled ? new Date(disabled).toISOString() : null,
             };
         });
+    }
+
+    getKeyPoolStatus() {
+        return {
+            gemini: geminiKeyPool.getStatus(),
+            groq: groqKeyPool.getStatus(),
+        };
     }
 
     /**

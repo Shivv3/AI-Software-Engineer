@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useProjectContext } from './ProjectContext';
 import './PhaseSidebar.css';
 
 const phases = [
-  { key: 'requirements', label: 'Requirements' },
-  { key: 'design', label: 'Design' },
-  { key: 'implementation', label: 'Build' },
-  { key: 'quality', label: 'Quality' },
+  { key: 'requirements', label: 'Requirements', path: 'requirements' },
+  { key: 'design', label: 'Design', path: 'design' },
+  { key: 'implementation', label: 'Build Lab', path: 'implementation' },
+  { key: 'generate', label: 'Code Folder', path: 'generate' },
+  { key: 'quality', label: 'Quality', path: 'quality' },
 ];
 
 function scoreClass(score) {
@@ -18,6 +20,8 @@ function scoreClass(score) {
 
 export default function PhaseSidebar() {
   const { health } = useProjectContext();
+  const navigate = useNavigate();
+  const { projectId } = useParams();
   const phaseData = health?.phases || {};
 
   const summary = useMemo(() => {
@@ -35,7 +39,12 @@ export default function PhaseSidebar() {
           const item = phaseData[phase.key] || {};
           const score = item.score;
           return (
-            <div key={phase.key} className="phase-sidebar-item">
+            <button
+              key={phase.key}
+              className="phase-sidebar-item"
+              type="button"
+              onClick={() => navigate(`/projects/${projectId}/${phase.path}`)}
+            >
               <div className="phase-sidebar-index">{index + 1}</div>
               <div className="phase-sidebar-copy">
                 <div className="phase-sidebar-label">{phase.label}</div>
@@ -44,7 +53,7 @@ export default function PhaseSidebar() {
               <div className={`phase-sidebar-score ${scoreClass(score)}`}>
                 {score === null || score === undefined ? '--' : score}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

@@ -255,9 +255,9 @@ export default function SystemDesignWizard() {
     const dateTag = new Date().toISOString().split('T')[0];
     await addDocument({
       name: `System Design ${dateTag}`,
-      type: 'Design',
-      mime: 'text/plain',
-      content: txt,
+      type: 'system_design',
+      mime: 'application/json',
+      content: JSON.stringify(designResult, null, 2),
       useAsContext: true,
       createdAt: new Date().toISOString(),
     });

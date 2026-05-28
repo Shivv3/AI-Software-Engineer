@@ -28,6 +28,16 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phase-sidebar-item:hover .phase-sidebar-label {
+  color: #c7d2fe;
 }
 
 .phase-sidebar-index {

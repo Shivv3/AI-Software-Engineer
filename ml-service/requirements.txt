@@ -1,0 +1,12 @@
+# Python 3.12 compatible versions
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+spacy==3.8.4
+sentence-transformers==3.4.1
+scikit-learn==1.5.2
+shap==0.45.1
+radon==6.0.1
+numpy==1.26.4
+scipy==1.13.1
+networkx==3.3

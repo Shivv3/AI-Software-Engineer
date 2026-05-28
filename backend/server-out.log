@@ -1,0 +1,7 @@
+Loading .env from: C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\.env
+[dotenv@17.2.3] injecting env (8) from ..\.env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Loading LLM .env from: C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\.env
+[dotenv@17.2.3] injecting env (0) from ..\.env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+mammoth loaded successfully
+Database schema initialized safely.
+Server running on port 4000

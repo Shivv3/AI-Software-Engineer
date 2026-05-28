@@ -4,7 +4,7 @@ const { getLinks, syncRequirementsFromText } = require('../services/artifacts');
 
 function createProjectInsightsRouter(db) {
   const router = express.Router();
-  router.use(requireAuth);
+  router.use('/api/projects', requireAuth);
 
   function getProject(req, res, next) {
     const project = db.prepare(`

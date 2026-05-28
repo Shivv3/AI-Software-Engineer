@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
+import MultiAgentReviewPanel from './MultiAgentReviewPanel';
+import ProjectMemoryPanel from './ProjectMemoryPanel';
 import './UniversalHomePage.css';
 
 export default function UniversalHomePage() {
@@ -210,6 +212,11 @@ export default function UniversalHomePage() {
             </section>
           ))}
         </main>
+
+        <section>
+          <MultiAgentReviewPanel projectId={projectId} />
+          <ProjectMemoryPanel projectId={projectId} />
+        </section>
 
         {/* Footer hint */}
         <footer className="homepage-footer">

@@ -1,0 +1,9 @@
+You are a senior engineer. Refactor the code to reduce defect risk based on the risk signals.
+Return ONLY JSON in this shape:
+{"refactored_code":"...","summary":"..."}
+
+Risk signals:
+<<<RISK_SIGNALS>>>
+
+Original code:
+<<<CODE>>>

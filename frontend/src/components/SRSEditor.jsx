@@ -4,6 +4,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import api from '../lib/api';
 import { useProjectContext } from './ProjectContext';
+import ConflictPanel from './ConflictPanel';
 import './SRSEditor.css';
 
 const SECTION_MAPPING = {
@@ -15,7 +16,7 @@ const SECTION_MAPPING = {
 export default function SRSEditor() {
   const navigate = useNavigate();
   const { projectId: routeProjectId } = useParams();
-  const { addDocument, projectName } = useProjectContext();
+  const { addDocument, projectName, refreshHealth } = useProjectContext();
   const [currentStep, setCurrentStep] = useState('description'); // 'description', 'questions', 'review', 'progress'
   const [projectDescription, setProjectDescription] = useState('');
   const [generateLoading, setGenerateLoading] = useState(false);
@@ -37,6 +38,15 @@ export default function SRSEditor() {
   const [srsStatus, setSrsStatus] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [qualityResults, setQualityResults] = useState(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [qualityError, setQualityError] = useState('');
+  const [conflictResults, setConflictResults] = useState(null);
+  const [conflictLoading, setConflictLoading] = useState(false);
+  const [conflictError, setConflictError] = useState('');
+  const [analysisTab, setAnalysisTab] = useState('quality');
+
+  const activeProjectId = routeProjectId || projectId;
 
   const handleSaveFinalToSidebar = async () => {
     if (!routeProjectId) {
@@ -272,6 +282,61 @@ export default function SRSEditor() {
       alert('Failed to export SRS');
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  const extractRequirementsFromSrs = (text) => {
+    if (!text) return [];
+    const sentences = text
+      .replace(/\r/g, ' ')
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map((s) => s.replace(/^[-*#\d.\s]+/, '').trim())
+      .filter((s) => /\b(shall|must|should|will|require|requires|required)\b/i.test(s))
+      .filter((s) => s.length > 10);
+    return Array.from(new Set(sentences)).slice(0, 50);
+  };
+
+  const handleAnalyzeQuality = async () => {
+    const requirements = extractRequirementsFromSrs(finalSrsContent);
+    if (!requirements.length) {
+      setQualityError('No requirement sentences detected.');
+      return;
+    }
+    setQualityError('');
+    setQualityLoading(true);
+    try {
+      const response = await api.post('/ml/requirements/analyze', {
+        requirements,
+        project_id: activeProjectId,
+        srs_text: finalSrsContent,
+      });
+      setQualityResults(response.data.scores || []);
+      refreshHealth();
+    } catch (error) {
+      setQualityError(error.response?.data?.error || 'Analysis failed');
+    } finally {
+      setQualityLoading(false);
+    }
+  };
+
+  const handleDetectConflicts = async () => {
+    const requirements = extractRequirementsFromSrs(finalSrsContent);
+    if (!requirements.length) {
+      setConflictError('No requirement sentences detected.');
+      return;
+    }
+    setConflictError('');
+    setConflictLoading(true);
+    try {
+      const response = await api.post('/ml/conflict/detect', {
+        requirements,
+        project_id: activeProjectId,
+      });
+      setConflictResults(response.data);
+    } catch (error) {
+      setConflictError(error.response?.data?.error || 'Conflict detection failed');
+    } finally {
+      setConflictLoading(false);
     }
   };
 
@@ -940,6 +1005,84 @@ export default function SRSEditor() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="srs-editor-card" style={{ marginTop: '1.5rem' }}>
+            <div className="analysis-tabs">
+              <button
+                className={`analysis-tab ${analysisTab === 'quality' ? 'active' : ''}`}
+                onClick={() => setAnalysisTab('quality')}
+              >
+                Quality Analysis
+              </button>
+              <button
+                className={`analysis-tab ${analysisTab === 'conflicts' ? 'active' : ''}`}
+                onClick={() => setAnalysisTab('conflicts')}
+              >
+                Conflict Detection
+              </button>
+            </div>
+
+            {analysisTab === 'quality' ? (
+              <div className="quality-panel">
+                <div className="quality-head">
+                  <div>
+                    <h3>Requirements Quality Analysis</h3>
+                    <p>Score each requirement and highlight issues to fix.</p>
+                  </div>
+                  <button
+                    className="quality-button"
+                    onClick={handleAnalyzeQuality}
+                    disabled={qualityLoading || !finalSrsContent}
+                  >
+                    {qualityLoading ? 'Analyzing...' : 'Analyze Quality'}
+                  </button>
+                </div>
+
+                {qualityError && <div className="quality-error">{qualityError}</div>}
+
+                {qualityResults?.length ? (
+                  <div className="quality-results">
+                    <div className="quality-summary">
+                      Avg Score:{' '}
+                      {Math.round(
+                        qualityResults.reduce((sum, item) => sum + item.score, 0) / qualityResults.length,
+                      )}
+                      /100
+                    </div>
+                    {qualityResults.map((item, idx) => (
+                      <div key={`quality-${idx}`} className={`quality-item quality-${item.label}`}>
+                        <div className="quality-item-head">
+                          <span className="quality-score">{item.score}</span>
+                          <span className="quality-text">{item.text}</span>
+                        </div>
+                        {item.issues?.length ? (
+                          <ul>
+                            {item.issues.map((issue, issueIdx) => (
+                              <li key={`issue-${issueIdx}`}>
+                                <strong>{issue.type.replace(/_/g, ' ')}:</strong>{' '}
+                                {item.gemini_explanation || issue.description}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="quality-empty">Run the analyzer to see requirement scores.</div>
+                )}
+              </div>
+            ) : (
+              <ConflictPanel
+                loading={conflictLoading}
+                error={conflictError}
+                conflicts={conflictResults?.conflict_pairs || []}
+                graph={conflictResults?.graph}
+                onAnalyze={handleDetectConflicts}
+                requirementsCount={extractRequirementsFromSrs(finalSrsContent).length}
+              />
+            )}
           </div>
         </div>
       </div>

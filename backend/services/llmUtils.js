@@ -12,13 +12,82 @@ function extractJson(rawText = '') {
   return rawText.trim();
 }
 
+function escapeControlCharsInStrings(text) {
+  if (!text) return text;
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        result += ch;
+        continue;
+      }
+
+      if (ch === '\\') {
+        isEscaped = true;
+        result += ch;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = false;
+        result += ch;
+        continue;
+      }
+
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        switch (ch) {
+          case '\n':
+            result += '\\n';
+            break;
+          case '\r':
+            result += '\\r';
+            break;
+          case '\t':
+            result += '\\t';
+            break;
+          case '\b':
+            result += '\\b';
+            break;
+          case '\f':
+            result += '\\f';
+            break;
+          default:
+            result += `\\u${code.toString(16).padStart(4, '0')}`;
+        }
+        continue;
+      }
+
+      result += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      result += ch;
+      continue;
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
 function parseLLMJson(rawText) {
   const extracted = extractJson(rawText);
   try {
     return JSON.parse(extracted);
   } catch (err) {
     try {
-      const repaired = extracted.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+      const escapedControl = escapeControlCharsInStrings(extracted);
+      const repaired = escapedControl.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
       return JSON.parse(repaired);
     } catch {
       throw err;
@@ -36,4 +105,4 @@ function formatContextBlock(context) {
   }
 }
 
-module.exports = { extractJson, parseLLMJson, formatContextBlock };
+module.exports = { extractJson, escapeControlCharsInStrings, parseLLMJson, formatContextBlock };

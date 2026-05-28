@@ -1,0 +1,6 @@
+Decompose the requirement into epics, user stories, acceptance criteria, and test cases.
+Return ONLY JSON in this shape:
+{"epics":[{"title":"...","stories":[{"title":"...","acceptance_criteria":["..."],"test_cases":["..."]}]}]}
+
+Requirement:
+<<<REQUIREMENT>>>

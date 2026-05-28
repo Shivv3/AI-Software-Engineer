@@ -1,0 +1,80 @@
+.adversarial-panel {
+  margin-top: 2rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  color: #e2e8f0;
+}
+
+.adversarial-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.adversarial-head h2 {
+  margin: 0 0 0.25rem 0;
+}
+
+.adversarial-head p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.adversarial-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.6rem 1rem;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adversarial-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.adversarial-textarea {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.75rem;
+  color: #f1f5f9;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.adversarial-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.adversarial-results {
+  display: grid;
+  gap: 1rem;
+}
+
+.adversarial-card {
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.adversarial-title {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.adversarial-empty {
+  color: #94a3b8;
+}

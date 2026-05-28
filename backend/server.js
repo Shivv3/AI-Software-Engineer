@@ -6,6 +6,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs').promises;
 const Ajv = require('ajv');
+const axios = require('axios');
 const { Document, Packer, Paragraph } = require('docx');
 const db = require('./db');
 const llm = require('./services/llm');
@@ -16,7 +17,7 @@ const createProjectDocumentsRouter = require('./routes/projectDocuments');
 const createProjectInsightsRouter = require('./routes/projectInsights');
 const { extractJson, parseLLMJson, formatContextBlock } = require('./services/llmUtils');
 const { loadPrompt } = require('./services/prompts');
-const { syncRequirementsFromText } = require('./services/artifacts');
+const { syncRequirementsFromText, extractRequirementSentences } = require('./services/artifacts');
 
 // Document parsing libraries - using dynamic imports for ESM modules
 let pdfParseModule;
@@ -45,6 +46,7 @@ async function loadPdfParse() {
 const app = express();
 const port = process.env.PORT || 4000;
 const ajv = new Ajv();
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
 
 // Enable CORS
 app.use((req, res, next) => {
@@ -75,8 +77,21 @@ function verifyPassword(password, hash) {
 }
 
 // Session configuration
+const sessionSecret = process.env.SESSION_SECRET
+  || (process.env.NODE_ENV === 'production'
+    ? null
+    : 'dev-session-secret-ai-software-engineer-change-me');
+
+if (!sessionSecret) {
+  throw new Error('SESSION_SECRET is required when NODE_ENV=production');
+}
+
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV !== 'production') {
+  console.warn('SESSION_SECRET not set. Using stable development fallback; add SESSION_SECRET to .env for shared/dev-demo use.');
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -90,10 +105,10 @@ app.use(session({
 const sdlcSchema = require('./schemas/sdlc_recommendation.schema.json');
 const planSchema = require('./schemas/plan_requirements.schema.json');
 
-// LLM wrapper
-async function callLLM(promptText) {
+// LLM wrapper — accepts optional { task } for model routing
+async function callLLM(promptText, options = {}) {
   try {
-    return await llm.generate(promptText);
+    return await llm.generate(promptText, options);
   } catch (error) {
     if (error.message.includes('Rate limit exceeded')) {
       throw new Error('Server is busy, please try again in a few moments');
@@ -101,6 +116,16 @@ async function callLLM(promptText) {
     throw error;
   }
 }
+
+// LLM provider health check
+app.get('/api/llm/status', (req, res) => {
+  try {
+    const status = llm.getStatus();
+    res.json({ providers: status });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Validation helper
 async function validateLLMResponse(responseText, schema, retryPrompt) {
@@ -111,7 +136,7 @@ async function validateLLMResponse(responseText, schema, retryPrompt) {
     }
 
     // Retry once with explicit schema instruction
-    const retryResponse = await callLLM(retryPrompt);
+    const retryResponse = await callLLM(retryPrompt, { task: 'fast' });
     const parsed2 = JSON.parse(extractJson(retryResponse));
     
     if (ajv.validate(schema, parsed2)) {
@@ -125,6 +150,35 @@ async function validateLLMResponse(responseText, schema, retryPrompt) {
   }
 }
 
+async function callMlService(path, payload) {
+  const url = `${ML_SERVICE_URL}${path}`;
+  const response = await axios.post(url, payload, { timeout: 60000 });
+  return response.data;
+}
+
+function getContextDocuments(projectId) {
+  if (!projectId) return [];
+  return db.prepare(`
+    SELECT name, type, content
+    FROM project_documents
+    WHERE project_id = ? AND use_as_context = 1
+    ORDER BY updated_at DESC
+  `).all(projectId);
+}
+
+function buildContextText(docs, maxChars = 12000) {
+  const blocks = [];
+  let total = 0;
+  for (const doc of docs) {
+    if (!doc.content || String(doc.content).startsWith('data:')) continue;
+    const block = `---\n[${doc.type || 'Doc'}] ${doc.name}\n${doc.content}`;
+    if (total + block.length > maxChars) break;
+    blocks.push(block);
+    total += block.length;
+  }
+  return blocks.join('\n\n');
+}
+
 // Logging helper
 async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedResponse) {
   db.prepare(`
@@ -136,6 +190,16 @@ async function logInteraction(projectId, endpoint, prompt, rawResponse, parsedRe
 // Endpoints
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api/code', requireAuth);
+app.use('/api/design', requireAuth);
+app.use('/api/documents', requireAuth);
+app.use('/api/ml', requireAuth);
+app.use('/api/ai', requireAuth);
+app.use('/api/srs', requireAuth);
+app.use('/api/project', requireAuth);
+app.use('/api/projects', requireAuth);
+app.use('/api/sdlc', requireAuth);
+app.use('/api/plan', requireAuth);
 app.use('/api/projects/:projectId/documents', createProjectDocumentsRouter(db));
 app.use(createProjectInsightsRouter(db));
 
@@ -270,7 +334,7 @@ app.post('/api/sdlc/recommend', async (req, res) => {
       `${project_text}\n${constraints ? 'Constraints:\n' + JSON.stringify(constraints, null, 2) : ''}`);
 
     console.log('Calling LLM with prompt:', prompt);
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'fast' });
     console.log('Raw LLM response:', rawResponse);
 
     let parsedResponse;
@@ -324,18 +388,22 @@ app.post('/api/sdlc/recommend', async (req, res) => {
 
 app.post('/api/plan/generate', async (req, res) => {
   try {
-    const { project_text } = req.body;
-    const promptTemplate = await loadPrompt('plan_prompt.txt');
-    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', project_text || '');
+    const { project_text } = req.body || {};
+    if (!project_text || typeof project_text !== 'string') {
+      return res.status(400).json({ error: 'project_text is required and must be a string' });
+    }
 
-    const rawResponse = await callLLM(prompt);
+    const promptTemplate = await loadPrompt('plan_prompt.txt');
+    const prompt = promptTemplate.replace('<<<USER_PROJECT>>>', project_text);
+
+    const rawResponse = await callLLM(prompt, { task: 'fast' });
     const validated = await validateLLMResponse(
       rawResponse,
       planSchema,
       `Previous output invalid. Please return ONLY JSON matching schema: ${JSON.stringify(planSchema)}. Project: ${project_text}`
     );
 
-    await logInteraction(req.params.id, '/api/plan/generate', prompt, rawResponse, validated);
+    await logInteraction(req.body?.project_id || 'plan_anonymous', '/api/plan/generate', prompt, rawResponse, validated);
     res.json(validated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -372,7 +440,7 @@ app.post('/api/design/system', async (req, res) => {
       .replace('<<<CONTEXT_JSON>>>', contextJson);
 
     console.log(`Calling LLM for system design with SRS length: ${srs_text.length} chars`);
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'reasoning' });
 
     let parsed;
     try {
@@ -422,7 +490,7 @@ app.post('/api/design/schema', async (req, res) => {
       .replace('<<<CONTEXT_TEXT>>>', formatContextBlock(context_text || '(none provided)'));
 
     console.log(`Calling LLM for schema design. Input length: ${requirements_text.length} chars`);
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'reasoning' });
 
     let parsed;
     try {
@@ -464,7 +532,7 @@ app.post('/api/code/generate', async (req, res) => {
       .replace('<<<STYLE>>>', style || 'none provided')
       .replace('<<<INCLUDE_TESTS>>>', include_tests ? 'yes' : 'no');
 
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'code' });
     const parsed = parseLLMJson(rawResponse);
 
     if (!parsed || typeof parsed !== 'object' || !parsed.code) {
@@ -512,7 +580,7 @@ app.post('/api/code/translate', async (req, res) => {
       .replace('<<<INSTRUCTIONS>>>', instructions || 'none')
       .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context));
 
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'code' });
     const parsed = parseLLMJson(rawResponse);
 
     if (!parsed || typeof parsed !== 'object' || !parsed.code) {
@@ -558,7 +626,7 @@ app.post('/api/code/test', async (req, res) => {
       .replace('<<<INSTRUCTIONS>>>', instructions || 'comprehensive testing with all quality metrics and scalability tests')
       .replace('<<<WANT_FIX>>>', want_fix ? 'yes' : 'no');
 
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'code' });
     const parsed = parseLLMJson(rawResponse);
 
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tests)) {
@@ -606,7 +674,7 @@ app.post('/api/code/review', async (req, res) => {
       .replace('<<<CONTEXT_BLOCK>>>', formatContextBlock(context))
       .replace('<<<FOCUS>>>', focus || 'general best practices');
 
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'review' });
     const parsed = parseLLMJson(rawResponse);
 
     if (!parsed || typeof parsed !== 'object' || !parsed.summary || !Array.isArray(parsed.findings)) {
@@ -673,6 +741,12 @@ app.post('/api/srs/edit', async (req, res) => {
       full_content 
     } = req.body;
 
+    if (!project_id || !selected_text || !instruction || !full_content) {
+      return res.status(400).json({
+        error: 'project_id, selected_text, instruction, and full_content are required',
+      });
+    }
+
     // Handle text size and code blocks
     let textToProcess = selected_text;
     let isCode = false;
@@ -701,8 +775,8 @@ app.post('/api/srs/edit', async (req, res) => {
       prompt += '\nNote: The text contains code blocks. Unless specifically requested, preserve code structure and only modify comments or documentation.';
     }
 
-    const rawResponse = await callLLM(prompt);
-    const parsed = JSON.parse(rawResponse);
+    const rawResponse = await callLLM(prompt, { task: 'fast' });
+    const parsed = parseLLMJson(rawResponse);
     
     if (!parsed.suggestion_text || parsed.suggestion_text.trim().length === 0) {
       throw new Error('Invalid or empty suggestion received');
@@ -747,6 +821,12 @@ app.post('/api/srs/apply', async (req, res) => {
       selection_start,
       selection_end
     } = req.body;
+
+    if (!project_id || !srs_content || !suggestion_text) {
+      return res.status(400).json({
+        error: 'project_id, srs_content, and suggestion_text are required',
+      });
+    }
 
     // Get current version number
     const lastVersion = db.prepare(`
@@ -886,7 +966,7 @@ app.get('/api/project/:id', requireAuth, (req, res) => {
 });
 
 // Get project version history
-app.get('/api/project/:id/versions', (req, res) => {
+app.get('/api/project/:id/versions', requireAuth, (req, res) => {
   try {
     const versions = db.prepare(`
       SELECT 
@@ -909,7 +989,7 @@ app.get('/api/project/:id/versions', (req, res) => {
 });
 
 // Get specific version content
-app.get('/api/project/:id/version/:version', (req, res) => {
+app.get('/api/project/:id/version/:version', requireAuth, (req, res) => {
   try {
     const versionData = db.prepare(`
       SELECT *
@@ -939,8 +1019,8 @@ app.post('/api/srs/generate-questions', async (req, res) => {
     const promptTemplate = await loadPrompt('srs_generate_prompt.txt');
     const prompt = promptTemplate.replace('<<<PROJECT_DESCRIPTION>>>', project_description);
 
-    const rawResponse = await callLLM(prompt);
-    const parsed = JSON.parse(rawResponse);
+    const rawResponse = await callLLM(prompt, { task: 'fast' });
+    const parsed = parseLLMJson(rawResponse);
 
     // Validate the response structure
     if (!parsed.sections || !Array.isArray(parsed.sections)) {
@@ -974,8 +1054,8 @@ app.post('/api/srs/generate-content', async (req, res) => {
       .replace('<<<SUBSECTION_TITLE>>>', subsection_title)
       .replace('<<<QA_PAIRS>>>', qaText);
 
-    const rawResponse = await callLLM(prompt);
-    const parsed = JSON.parse(rawResponse);
+    const rawResponse = await callLLM(prompt, { task: 'fast' });
+    const parsed = parseLLMJson(rawResponse);
 
     // Validate the response
     if (!parsed.content) {
@@ -1000,22 +1080,6 @@ app.post('/api/srs/save-section', async (req, res) => {
     if (!project_id || !section_id || !subsection_id || !content) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-
-    // Create SRS sections table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS srs_sections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT,
-        section_id TEXT,
-        subsection_id TEXT,
-        content TEXT,
-        status TEXT DEFAULT 'draft',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(project_id) REFERENCES projects(id),
-        UNIQUE(project_id, section_id, subsection_id)
-      );
-    `);
 
     // Normalize IDs by converting dots to underscores
     const normalizedSectionId = section_id.replace(/\./g, '_');
@@ -1460,7 +1524,169 @@ app.post('/api/design/diagram', async (req, res) => {
       .replace('<<<CONTEXT_TEXT>>>', formatContextBlock(context_text || ''));
 
     console.log(`Calling LLM for ${diagram_type} diagram generation`);
-    const rawResponse = await callLLM(prompt);
+    const rawResponse = await callLLM(prompt, { task: 'creative' });
+
+    // Extract Mermaid code from response (remove markdown code fences if present)
+    let mermaidCode = rawResponse.trim();
+    mermaidCode = mermaidCode.replace(/^```mermaid\s*/i, '').replace(/```\s*$/i, '');
+    mermaidCode = mermaidCode.replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+    mermaidCode = mermaidCode.trim();
+
+    if (!mermaidCode) {
+      throw new Error('LLM did not return valid Mermaid code');
+    }
+
+    // Normalize whitespace: replace non-breaking spaces with normal spaces
+    mermaidCode = mermaidCode.replace(/\u00a0/g, ' ');
+
+    // ── Normalize graph edges (expand & separators) ─────────────────────
+    const normalizeGraphEdges = (code) => {
+      const lines = code.split('\n');
+      const normalized = [];
+
+      const normalizeEdgeLine = (line) => {
+        const indentMatch = line.match(/^(\s*)/);
+        const indent = indentMatch ? indentMatch[1] : '';
+        if (!line.includes('-->')) {
+          return [line];
+        }
+
+        const parts = line.split('-->');
+        if (parts.length < 2) return [line];
+
+        const lhsRaw = parts[0].replace(/%%.*/, '').trim();
+        const rhsFull = parts.slice(1).join('-->').trim();
+
+        if (!lhsRaw || !rhsFull) return [line];
+
+        let label = '';
+        let targetRaw = rhsFull;
+        const labelMatch = rhsFull.match(/^\|\s*([^|]+?)\s*\|\s*(.+)$/);
+        if (labelMatch) {
+          label = labelMatch[1].trim();
+          targetRaw = labelMatch[2].trim();
+        } else {
+          const plainMatch = rhsFull.match(/^([^\s]+)(.*)$/);
+          if (plainMatch) {
+            targetRaw = plainMatch[1].trim();
+          }
+        }
+
+        const sources = lhsRaw.split('&').map((s) => s.trim()).filter(Boolean);
+        const targets = targetRaw.split('&').map((t) => t.trim()).filter(Boolean);
+        if (!sources.length || !targets.length) return [line];
+
+        const labelSegment = label ? `|${label}|` : '';
+        const expanded = [];
+        sources.forEach((s) => {
+          targets.forEach((t) => {
+            expanded.push(`${indent}${s} -->${labelSegment} ${t}`);
+          });
+        });
+        return expanded;
+      };
+
+      lines.forEach((line) => {
+        normalizeEdgeLine(line).forEach((l) => normalized.push(l));
+      });
+      return normalized.join('\n');
+    };
+
+    // For non-ER diagrams, normalize labels and expand & edges
+    if (diagram_type !== 'er') {
+      // Convert "A --> B: Label" to "A -->|Label| B"
+      mermaidCode = mermaidCode.replace(
+        /([A-Za-z0-9_]+)\s*-->\s*([A-Za-z0-9_]+)\s*:\s*([^\n]+)/g,
+        (_m, a, b, label) => `${a} -->|${label.trim()}| ${b}`
+      );
+      // Convert "A -- Label --> B" to pipe form
+      mermaidCode = mermaidCode.replace(
+        /([A-Za-z0-9_]+)\s*--\s*([^>\n]+?)\s*-->\s*([A-Za-z0-9_]+)/g,
+        (_m, a, label, b) => `${a} -->|${label.trim()}| ${b}`
+      );
+      mermaidCode = normalizeGraphEdges(mermaidCode);
+    }
+
+    // Normalize ER diagrams: SQL types → Mermaid types + uppercase entities
+    if (diagram_type === 'er') {
+      mermaidCode = mermaidCode
+        .replace(/\b(SERIAL|INT|INTEGER)\s+/gi, 'int ')
+        .replace(/\b(VARCHAR\([^)]+\)|CHAR\([^)]+\)|TEXT|STRING)\s+/gi, 'string ')
+        .replace(/\b(DATE|DATETIME|TIMESTAMP)\s+/gi, 'date ')
+        .replace(/\b(NUMERIC\([^)]+\)|DECIMAL\([^)]+\)|FLOAT|DOUBLE|REAL)\s+/gi, 'number ')
+        .replace(/\b(BOOLEAN|BOOL)\s+/gi, 'boolean ');
+      
+      mermaidCode = mermaidCode.replace(/erDiagram\s*\n\s*(\w+)/g, (match, entityName) => {
+        return `erDiagram\n    ${entityName.toUpperCase()}`;
+      });
+      
+      mermaidCode = mermaidCode.replace(/^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*\{/gm, (match, indent, entityName) => {
+        return `${indent}${entityName.toUpperCase()} {`;
+      });
+      
+      mermaidCode = mermaidCode.replace(/([A-Za-z_][A-Za-z0-9_]*)\s*(\|\|--[o|]?\{|\}o--o\{)\s*([A-Za-z_][A-Za-z0-9_]*)(\s*:\s*[^\n]*)?/g, (match, entity1, connector, entity2, relationshipName) => {
+        return `${entity1.toUpperCase()} ${connector} ${entity2.toUpperCase()}${relationshipName || ''}`;
+      });
+    }
+
+    // ── Return mermaid code — client renders it ─────────────────────────
+    await logInteraction(
+      req.params.id || 'diagram_generation',
+      '/api/design/diagram',
+      prompt.substring(0, 1000) + '...',
+      `Mermaid code generated (${mermaidCode.length} chars)`,
+      { diagram_type }
+    );
+
+    res.json({
+      mermaid_code: mermaidCode,
+      diagram_type: diagram_type
+    });
+  } catch (error) {
+    console.error('Diagram generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate diagram' });
+  }
+});
+
+    if (!diagram_type || typeof diagram_type !== 'string') {
+      return res.status(400).json({ error: 'diagram_type is required and must be a string' });
+    }
+
+    const validTypes = ['sequence', 'er', 'dataflow', 'usecase', 'architecture'];
+    if (!validTypes.includes(diagram_type)) {
+      return res.status(400).json({ 
+        error: `Invalid diagram_type. Must be one of: ${validTypes.join(', ')}` 
+      });
+    }
+
+    // Combine project info and context
+    let combinedInfo = project_info || '';
+    if (selected_file_content && typeof selected_file_content === 'string') {
+      combinedInfo = combinedInfo 
+        ? `${combinedInfo}\n\n---\nAdditional context from selected file:\n${selected_file_content}`
+        : selected_file_content;
+    }
+    if (context_text && typeof context_text === 'string') {
+      combinedInfo = combinedInfo 
+        ? `${combinedInfo}\n\n---\nAdditional context:\n${context_text}`
+        : context_text;
+    }
+
+    if (!combinedInfo || !combinedInfo.trim()) {
+      return res.status(400).json({ 
+        error: 'Either project_info, context_text, or selected_file_content must be provided' 
+      });
+    }
+
+    // Load prompt template
+    const promptTemplate = await loadPrompt('diagram_generation_prompt.txt');
+    const prompt = promptTemplate
+      .replace('<<<DIAGRAM_TYPE>>>', diagram_type)
+      .replace('<<<PROJECT_INFO>>>', combinedInfo)
+      .replace('<<<CONTEXT_TEXT>>>', formatContextBlock(context_text || ''));
+
+    console.log(`Calling LLM for ${diagram_type} diagram generation`);
+    const rawResponse = await callLLM(prompt, { task: 'creative' });
 
     // Extract Mermaid code from response (remove markdown code fences if present)
     let mermaidCode = rawResponse.trim();
@@ -1735,6 +1961,315 @@ app.post('/api/design/diagram', async (req, res) => {
   } catch (error) {
     console.error('Diagram generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate diagram' });
+  }
+});
+
+// ML/NLP routes
+app.post('/api/ml/requirements/analyze', async (req, res) => {
+  try {
+    const { requirements, project_id, srs_text } = req.body || {};
+    let reqs = requirements;
+
+    if ((!Array.isArray(reqs) || reqs.length === 0) && srs_text) {
+      reqs = extractRequirementSentences(srs_text);
+    }
+
+    if (!Array.isArray(reqs) || reqs.length === 0) {
+      return res.status(422).json({ error: 'requirements must be a non-empty array' });
+    }
+
+    const limited = reqs.slice(0, 50);
+    const mlRes = await callMlService('/nlp/requirements/analyze', {
+      requirements: limited,
+      project_id,
+    });
+    const scores = mlRes.scores || [];
+
+    const flagged = scores.filter((item) => item.score < 80);
+    if (flagged.length > 0) {
+      const explanationPrompt = `You are a software requirements expert. For each requirement and its issues, provide a concise one-sentence explanation and a fix suggestion.\n\nReturn ONLY a JSON array with objects: {"text":"...","explanation":"..."}.\n\nItems:\n${JSON.stringify(flagged.map((s) => ({ text: s.text, issues: s.issues.map((i) => i.type) })))}\n`;
+      try {
+        const rawExplanation = await callLLM(explanationPrompt, { task: 'fast' });
+        const explanations = parseLLMJson(rawExplanation);
+        if (Array.isArray(explanations)) {
+          const explanationMap = new Map(explanations.map((e) => [e.text, e.explanation]));
+          scores.forEach((s) => {
+            if (explanationMap.has(s.text)) {
+              s.gemini_explanation = explanationMap.get(s.text);
+            }
+          });
+        }
+      } catch (_) {
+        // Best-effort explanation; ignore failures
+      }
+    }
+
+    if (project_id && scores.length > 0) {
+      const update = db.prepare(`
+        UPDATE requirements
+        SET quality_score = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = ? AND LOWER(text) = LOWER(?)
+      `);
+      db.transaction(() => {
+        scores.forEach((score) => update.run(score.score, project_id, score.text));
+      })();
+    }
+
+    res.json({ scores });
+  } catch (error) {
+    console.error('ML requirements analyze error:', error);
+    res.status(503).json({ error: 'Analysis service unavailable' });
+  }
+});
+
+app.post('/api/ml/conflict/detect', async (req, res) => {
+  try {
+    const { requirements, project_id } = req.body || {};
+    if (!Array.isArray(requirements) || requirements.length === 0) {
+      return res.status(422).json({ error: 'requirements must be a non-empty array' });
+    }
+
+    const mlRes = await callMlService('/nlp/conflict/detect', {
+      requirements: requirements.slice(0, 50),
+      project_id,
+    });
+
+    const conflicts = mlRes.conflict_pairs || [];
+    const explainTargets = conflicts
+      .filter((item) => item.confidence > 0.6)
+      .slice(0, 6);
+
+    if (explainTargets.length > 0) {
+      const promptTemplate = await loadPrompt('conflict_explanation_prompt.txt');
+      const results = await Promise.all(
+        explainTargets.map(async (item) => {
+          const prompt = promptTemplate
+            .replace('<<<TYPE>>>', item.conflict_type)
+            .replace('<<<REQ_A>>>', item.req_a)
+            .replace('<<<REQ_B>>>', item.req_b);
+          try {
+            const raw = await callLLM(prompt, { task: 'fast' });
+            const parsed = parseLLMJson(raw);
+            return { key: `${item.req_a_index}-${item.req_b_index}`, explanation: parsed.explanation || raw };
+          } catch (err) {
+            return { key: `${item.req_a_index}-${item.req_b_index}`, explanation: '' };
+          }
+        })
+      );
+      const map = new Map(results.map((r) => [r.key, r.explanation]));
+      conflicts.forEach((item) => {
+        const key = `${item.req_a_index}-${item.req_b_index}`;
+        if (map.has(key)) {
+          item.explanation = map.get(key);
+        }
+      });
+    }
+
+    res.json({
+      conflict_pairs: conflicts,
+      graph: mlRes.graph || { nodes: [], edges: [] },
+      summary: mlRes.summary || {},
+    });
+  } catch (error) {
+    console.error('ML conflict detect error:', error);
+    res.status(503).json({ error: 'Conflict detection unavailable' });
+  }
+});
+
+app.post('/api/ml/defect/predict', async (req, res) => {
+  try {
+    const { code, language } = req.body || {};
+    if (!code || !language) {
+      return res.status(422).json({ error: 'code and language are required' });
+    }
+    const mlRes = await callMlService('/code/defect/predict', { code, language });
+    res.json(mlRes);
+  } catch (error) {
+    console.error('ML defect predict error:', error);
+    res.status(503).json({ error: 'Defect prediction service unavailable' });
+  }
+});
+
+app.post('/api/ml/traceability/analyze', async (req, res) => {
+  try {
+    const { requirements, code_functions } = req.body || {};
+    if (!Array.isArray(requirements) || !Array.isArray(code_functions)) {
+      return res.status(422).json({ error: 'requirements and code_functions are required' });
+    }
+    const mlRes = await callMlService('/code/traceability/analyze', { requirements, code_functions });
+    res.json(mlRes);
+  } catch (error) {
+    console.error('ML traceability analyze error:', error);
+    res.status(503).json({ error: 'Traceability service unavailable' });
+  }
+});
+
+app.post('/api/ml/defect/refactor', async (req, res) => {
+  try {
+    const { code, language } = req.body || {};
+    if (!code || !language) {
+      return res.status(422).json({ error: 'code and language are required' });
+    }
+
+    const before = await callMlService('/code/defect/predict', { code, language });
+    const highRisk = (before.functions || []).filter((f) => f.risk_label === 'High');
+    const riskSignals = highRisk.length
+      ? highRisk.map((f) => `${f.name}: ${(f.shap_explanation || []).join('; ')}`).join('\n')
+      : 'No high-risk functions flagged. Improve clarity, modularity, and error handling.';
+
+    const promptTemplate = await loadPrompt('refactor_loop_prompt.txt');
+    const prompt = promptTemplate.replace('<<<RISK_SIGNALS>>>', riskSignals).replace('<<<CODE>>>', code);
+    const raw = await callLLM(prompt, { task: 'code' });
+    const parsed = parseLLMJson(raw);
+    const refactoredCode = parsed.refactored_code || parsed.code || code;
+
+    const after = await callMlService('/code/defect/predict', { code: refactoredCode, language });
+
+    res.json({
+      before,
+      after,
+      refactored_code: refactoredCode,
+      summary: parsed.summary || '',
+    });
+  } catch (error) {
+    console.error('Closed-loop refactor error:', error);
+    res.status(503).json({ error: 'Refactor service unavailable' });
+  }
+});
+
+// GenAI feature routes
+app.post('/api/ai/reviews/multi-agent', async (req, res) => {
+  try {
+    const { project_id, context_text } = req.body || {};
+    const docs = context_text ? [] : getContextDocuments(project_id);
+    const context = context_text || buildContextText(docs);
+
+    if (!context) {
+      return res.status(422).json({ error: 'No context provided. Mark documents as context first.' });
+    }
+
+    const [archPrompt, secPrompt, perfPrompt] = await Promise.all([
+      loadPrompt('multi_agent_architect_review.txt'),
+      loadPrompt('multi_agent_security_review.txt'),
+      loadPrompt('multi_agent_performance_review.txt'),
+    ]);
+
+    const [archRaw, secRaw, perfRaw] = await Promise.all([
+      callLLM(archPrompt.replace('<<<CONTEXT>>>', context), { task: 'review' }),
+      callLLM(secPrompt.replace('<<<CONTEXT>>>', context), { task: 'review' }),
+      callLLM(perfPrompt.replace('<<<CONTEXT>>>', context), { task: 'review' }),
+    ]);
+
+    const parseOrFallback = (raw) => {
+      try {
+        return parseLLMJson(raw);
+      } catch {
+        return { summary: raw, risks: [], actions: [] };
+      }
+    };
+
+    res.json({
+      architect: parseOrFallback(archRaw),
+      security: parseOrFallback(secRaw),
+      performance: parseOrFallback(perfRaw),
+    });
+  } catch (error) {
+    console.error('Multi-agent review error:', error);
+    res.status(503).json({ error: 'Multi-agent review unavailable' });
+  }
+});
+
+app.post('/api/ai/rag/answer', async (req, res) => {
+  try {
+    const { project_id, question } = req.body || {};
+    if (!question) {
+      return res.status(422).json({ error: 'question is required' });
+    }
+
+    const docs = getContextDocuments(project_id).filter((doc) => !String(doc.content).startsWith('data:'));
+    if (docs.length === 0) {
+      return res.status(422).json({ error: 'No context documents available' });
+    }
+
+    const mlRes = await callMlService('/rag/query', {
+      project_id: project_id || 'default',
+      question,
+      top_k: 3,
+      documents: docs.map((doc, idx) => ({
+        id: `${project_id || 'project'}-${idx}`,
+        name: doc.name,
+        content: doc.content,
+      })),
+    });
+
+    const matches = mlRes.matches || [];
+    if (!matches.length) {
+      return res.json({ answer: 'Not enough information', confidence: 0.0, sources: [], matches: [] });
+    }
+
+    const context = matches
+      .map((m) => `---\n[${m.name}]\n${m.text}`)
+      .join('\n\n');
+
+    const promptTemplate = await loadPrompt('rag_answer_prompt.txt');
+    const prompt = promptTemplate.replace('<<<CONTEXT>>>', context).replace('<<<QUESTION>>>', question);
+    const raw = await callLLM(prompt, { task: 'fast' });
+    let parsed = {};
+    try {
+      parsed = parseLLMJson(raw);
+    } catch {
+      parsed = { answer: raw };
+    }
+
+    res.json({
+      answer: parsed.answer || raw,
+      confidence: parsed.confidence ?? 0.5,
+      sources: parsed.sources || matches.map((m) => m.name),
+      matches,
+    });
+  } catch (error) {
+    console.error('RAG answer error:', error);
+    res.status(503).json({ error: 'RAG service unavailable' });
+  }
+});
+
+app.post('/api/ai/requirements/decompose', async (req, res) => {
+  try {
+    const { requirement } = req.body || {};
+    if (!requirement) {
+      return res.status(422).json({ error: 'requirement is required' });
+    }
+    const promptTemplate = await loadPrompt('requirement_decompose_prompt.txt');
+    const prompt = promptTemplate.replace('<<<REQUIREMENT>>>', requirement);
+    const raw = await callLLM(prompt, { task: 'fast' });
+    const parsed = parseLLMJson(raw);
+    res.json(parsed);
+  } catch (error) {
+    console.error('Requirement decomposition error:', error);
+    if (error.message && error.message.includes('busy')) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(503).json({ error: 'Requirement decomposition unavailable' });
+  }
+});
+
+app.post('/api/ai/requirements/adversarial', async (req, res) => {
+  try {
+    const { requirement } = req.body || {};
+    if (!requirement) {
+      return res.status(422).json({ error: 'requirement is required' });
+    }
+    const promptTemplate = await loadPrompt('adversarial_stress_tester_prompt.txt');
+    const prompt = promptTemplate.replace('<<<REQUIREMENT>>>', requirement);
+    const raw = await callLLM(prompt, { task: 'fast' });
+    const parsed = parseLLMJson(raw);
+    res.json(parsed);
+  } catch (error) {
+    console.error('Adversarial tester error:', error);
+    if (error.message && error.message.includes('busy')) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.status(503).json({ error: 'Adversarial tester unavailable' });
   }
 });
 

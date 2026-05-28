@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useProjectContext } from './ProjectContext';
+import CodeIntelligencePanel from './CodeIntelligencePanel';
 import './ValidationLab.css';
 
 const languageOptions = [
@@ -96,6 +97,7 @@ export default function ValidationLab() {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [viewTab, setViewTab] = useState('tests');
 
   const contextText = useMemo(() => {
     const usable = documents.filter((d) => d.useAsContext && d.content);
@@ -276,6 +278,21 @@ export default function ValidationLab() {
           )}
         </header>
 
+        <div className="val-tabs" style={{ marginBottom: '1rem' }}>
+          {['tests', 'intelligence'].map((tab) => (
+            <button
+              key={tab}
+              className={`val-tab ${viewTab === tab ? 'active' : ''}`}
+              onClick={() => setViewTab(tab)}
+            >
+              {tab === 'tests' ? 'Tests & Quality' : 'Intelligence'}
+            </button>
+          ))}
+        </div>
+
+        {viewTab === 'intelligence' ? (
+          <CodeIntelligencePanel code={input.code} language={input.language} />
+        ) : (
         <section className="val-card">
           <div className="val-card-head">
             <div>
@@ -574,6 +591,7 @@ export default function ValidationLab() {
             </div>
           )}
         </section>
+        )}
       </div>
     </div>
   );

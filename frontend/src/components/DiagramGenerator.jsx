@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useProjectContext } from './ProjectContext';
 import './DiagramGenerator.css';
@@ -16,8 +16,119 @@ export default function DiagramGenerator() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
+  const [renderError, setRenderError] = useState('');
+
+  const mermaidContainerRef = useRef(null);
+  const renderIdRef = useRef(0);
 
   const contextDocs = useMemo(() => documents.filter((d) => d.useAsContext), [documents]);
+
+  // ── Mermaid client-side rendering ──────────────────────────────────────
+
+  const loadMermaid = useCallback(async () => {
+    if (window.mermaid) return window.mermaid;
+    // Dynamically load Mermaid from CDN
+    return new Promise((resolve, reject) => {
+      if (document.querySelector('script[data-mermaid-loader]')) {
+        // Script already loading, wait for it
+        const check = setInterval(() => {
+          if (window.mermaid) { clearInterval(check); resolve(window.mermaid); }
+        }, 100);
+        setTimeout(() => { clearInterval(check); reject(new Error('Mermaid load timeout')); }, 15000);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      script.setAttribute('data-mermaid-loader', 'true');
+      script.onload = () => {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          themeVariables: {
+            darkMode: true,
+            background: '#0f172a',
+            primaryColor: '#8b5cf6',
+            primaryTextColor: '#e2e8f0',
+            primaryBorderColor: '#6d28d9',
+            lineColor: '#94a3b8',
+            secondaryColor: '#1e293b',
+            tertiaryColor: '#334155',
+            noteBkgColor: '#1e293b',
+            noteTextColor: '#e2e8f0',
+            noteBorderColor: '#475569',
+            actorBkg: '#1e293b',
+            actorBorder: '#8b5cf6',
+            actorTextColor: '#e2e8f0',
+            actorLineColor: '#94a3b8',
+            signalColor: '#e2e8f0',
+            signalTextColor: '#e2e8f0',
+            labelBoxBkgColor: '#1e293b',
+            labelBoxBorderColor: '#475569',
+            labelTextColor: '#e2e8f0',
+            loopTextColor: '#e2e8f0',
+            activationBorderColor: '#8b5cf6',
+            activationBkgColor: '#1e293b',
+            sequenceNumberColor: '#8b5cf6',
+          },
+          securityLevel: 'loose',
+          fontFamily: '"Inter", "Segoe UI", system-ui, sans-serif',
+        });
+        resolve(window.mermaid);
+      };
+      script.onerror = () => reject(new Error('Failed to load Mermaid library'));
+      document.head.appendChild(script);
+    });
+  }, []);
+
+  const renderMermaidDiagram = useCallback(async (code) => {
+    if (!code || !mermaidContainerRef.current) return;
+    setRenderError('');
+    renderIdRef.current += 1;
+    const thisRenderId = renderIdRef.current;
+
+    try {
+      const mermaid = await loadMermaid();
+      // Clear container
+      mermaidContainerRef.current.innerHTML = '';
+
+      // Create a fresh element for rendering
+      const uniqueId = `mermaid-diagram-${Date.now()}`;
+      const el = document.createElement('div');
+      el.id = uniqueId;
+      el.textContent = code;
+      mermaidContainerRef.current.appendChild(el);
+
+      // Render
+      const { svg } = await mermaid.render(uniqueId + '-svg', code);
+      if (thisRenderId !== renderIdRef.current) return; // stale render
+      mermaidContainerRef.current.innerHTML = svg;
+
+      // Style the rendered SVG
+      const svgEl = mermaidContainerRef.current.querySelector('svg');
+      if (svgEl) {
+        svgEl.style.maxWidth = '100%';
+        svgEl.style.height = 'auto';
+        svgEl.style.borderRadius = '0.75rem';
+      }
+    } catch (err) {
+      if (thisRenderId !== renderIdRef.current) return;
+      console.error('Mermaid render error:', err);
+      setRenderError(err.message || 'Failed to render diagram');
+      // Show the raw mermaid code as fallback
+      if (mermaidContainerRef.current) {
+        mermaidContainerRef.current.innerHTML = `<pre class="diagram-code-block">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+      }
+    }
+  }, [loadMermaid]);
+
+  // Re-render when result changes
+  useEffect(() => {
+    if (result?.mermaid_code) {
+      renderMermaidDiagram(result.mermaid_code);
+    }
+  }, [result?.mermaid_code, renderMermaidDiagram]);
+
+  // ── Document extraction helpers ────────────────────────────────────────
 
   const isPdfDataUri = (content) => typeof content === 'string' && content.startsWith('data:application/pdf;base64,');
   const isDocxDataUri = (content, mime) => {
@@ -68,11 +179,14 @@ export default function DiagramGenerator() {
       .join('\n\n');
   };
 
+  // ── Submit ─────────────────────────────────────────────────────────────
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setStatus('');
     setSaveMessage('');
+    setRenderError('');
 
     if (!diagramType) {
       setError('Please select a diagram type.');
@@ -91,7 +205,7 @@ export default function DiagramGenerator() {
       setStatus(contextDocs.length ? 'Gathering context documents...' : 'Preparing request...');
       const contextText = await buildContextText();
 
-      setStatus('Generating diagram...');
+      setStatus('Generating diagram — this may take a moment...');
       const response = await fetch(`${API_BASE}/design/diagram`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,32 +243,75 @@ export default function DiagramGenerator() {
     }
   };
 
-  const handleDownload = () => {
-    if (!result?.image_data) {
-      setError('No diagram image available to download.');
+  // ── Download as PNG ────────────────────────────────────────────────────
+
+  const handleDownload = async () => {
+    if (!mermaidContainerRef.current) return;
+    const svgEl = mermaidContainerRef.current.querySelector('svg');
+    if (!svgEl) {
+      setError('No rendered diagram to download.');
       return;
     }
 
-    const link = document.createElement('a');
-    link.href = result.image_data;
-    link.download = `${diagramType}_diagram_${new Date().toISOString().split('T')[0]}.png`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      // Convert SVG to PNG via canvas
+      const svgData = new XMLSerializer().serializeToString(svgEl);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = 2; // 2x for retina quality
+        canvas.width = img.naturalWidth * scale;
+        canvas.height = img.naturalHeight * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        // Draw white background
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, img.naturalWidth, img.naturalHeight);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+
+        const pngUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = pngUrl;
+        link.download = `${diagramType}_diagram_${new Date().toISOString().split('T')[0]}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // Fallback: download as SVG
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(svgBlob);
+        link.download = `${diagramType}_diagram_${new Date().toISOString().split('T')[0]}.svg`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+      img.src = url;
+    } catch {
+      setError('Failed to export diagram as PNG.');
+    }
   };
 
+  // ── Save to sidebar ────────────────────────────────────────────────────
+
   const handleSaveToSidebar = async () => {
-    if (!result?.image_data) {
-      setError('No diagram image available to save.');
+    if (!result?.mermaid_code) {
+      setError('No diagram available to save.');
       return;
     }
 
     const dateTag = new Date().toISOString().split('T')[0];
+    const typeName = diagramTypes.find((t) => t.value === (result.diagram_type || diagramType));
     await addDocument({
-      name: `${diagramType.charAt(0).toUpperCase() + diagramType.slice(1)} Diagram ${dateTag}`,
+      name: `${typeName?.label || diagramType} ${dateTag}`,
       type: 'Diagram',
-      mime: 'image/png',
-      content: result.image_data,
+      mime: 'text/plain',
+      content: `[Mermaid Diagram: ${typeName?.label || diagramType}]\n\n${result.mermaid_code}`,
       useAsContext: false,
       createdAt: new Date().toISOString(),
     });
@@ -163,12 +320,25 @@ export default function DiagramGenerator() {
     setTimeout(() => setSaveMessage(''), 4000);
   };
 
+  // ── Copy Mermaid code ──────────────────────────────────────────────────
+
+  const handleCopyCode = async () => {
+    if (!result?.mermaid_code) return;
+    try {
+      await navigator.clipboard.writeText(result.mermaid_code);
+      setSaveMessage('Mermaid code copied!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch {
+      setError('Failed to copy to clipboard.');
+    }
+  };
+
   const diagramTypes = [
-    { value: 'sequence', label: 'Sequence Diagram', description: 'Show interactions between components over time' },
-    { value: 'er', label: 'ER Diagram', description: 'Entity-relationship model showing database structure' },
-    { value: 'dataflow', label: 'Data Flow Diagram', description: 'Show how data moves through the system' },
-    { value: 'usecase', label: 'Use Case Diagram', description: 'Show actors and use cases' },
-    { value: 'architecture', label: 'Architecture Diagram', description: 'High-level system architecture overview' },
+    { value: 'sequence', label: 'Sequence Diagram', description: 'Show interactions between components over time', icon: '↔' },
+    { value: 'er', label: 'ER Diagram', description: 'Entity-relationship model for database structure', icon: '⬡' },
+    { value: 'dataflow', label: 'Data Flow Diagram', description: 'Show how data moves through the system', icon: '⇢' },
+    { value: 'usecase', label: 'Use Case Diagram', description: 'Show actors and use cases', icon: '👤' },
+    { value: 'architecture', label: 'Architecture Diagram', description: 'High-level system architecture', icon: '🏗' },
   ];
 
   return (
@@ -204,26 +374,28 @@ export default function DiagramGenerator() {
             <form className="diagram-form" onSubmit={handleSubmit}>
               <label className="diagram-label">
                 Diagram Type *
-                <select
-                  className="diagram-select"
-                  value={diagramType}
-                  onChange={(e) => setDiagramType(e.target.value)}
-                  required
-                >
-                  <option value="">Select a diagram type...</option>
-                  {diagramTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label} - {type.description}
-                    </option>
-                  ))}
-                </select>
               </label>
+
+              <div className="diagram-type-grid">
+                {diagramTypes.map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    className={`diagram-type-card ${diagramType === type.value ? 'selected' : ''}`}
+                    onClick={() => setDiagramType(type.value)}
+                  >
+                    <span className="diagram-type-icon">{type.icon}</span>
+                    <span className="diagram-type-name">{type.label}</span>
+                    <span className="diagram-type-desc">{type.description}</span>
+                  </button>
+                ))}
+              </div>
 
               <label className="diagram-label">
                 Diagram Details (optional)
                 <textarea
                   className="diagram-textarea"
-                  rows={10}
+                  rows={8}
                   value={projectInfo}
                   onChange={(e) => setProjectInfo(e.target.value)}
                   placeholder="Add any specific flows, entities, or notes to guide the diagram. Context documents marked as 'Use in context' will be included automatically."
@@ -235,7 +407,12 @@ export default function DiagramGenerator() {
               {saveMessage && <div className="diagram-success">{saveMessage}</div>}
 
               <button className="diagram-submit" type="submit" disabled={loading}>
-                {loading ? 'Generating...' : 'Generate Diagram'}
+                {loading ? (
+                  <>
+                    <span className="diagram-spinner"></span>
+                    Generating...
+                  </>
+                ) : 'Generate Diagram'}
               </button>
             </form>
           </section>
@@ -254,49 +431,58 @@ export default function DiagramGenerator() {
                 <button
                   className="diagram-action"
                   onClick={handleDownload}
-                  disabled={!result?.image_data}
+                  disabled={!result?.mermaid_code}
+                  title="Download as PNG"
                 >
-                  Download PNG
+                  ⬇ PNG
+                </button>
+                <button
+                  className="diagram-action"
+                  onClick={handleCopyCode}
+                  disabled={!result?.mermaid_code}
+                  title="Copy Mermaid code"
+                >
+                  📋 Code
                 </button>
                 <button
                   className="diagram-action secondary"
                   onClick={handleSaveToSidebar}
-                  disabled={!result?.image_data}
+                  disabled={!result?.mermaid_code}
+                  title="Save to project sidebar"
                 >
-                  Save to sidebar
+                  💾 Save
                 </button>
               </div>
             </div>
 
             {!result && (
-              <p className="diagram-placeholder">
-                The generated diagram will appear here. Select a diagram type, provide information or select a file,
-                and click "Generate Diagram" to create your visualization.
-              </p>
+              <div className="diagram-empty-state">
+                <div className="diagram-empty-icon">📐</div>
+                <p className="diagram-placeholder">
+                  Select a diagram type, provide your project info, and click &quot;Generate Diagram&quot; to create your visualization.
+                </p>
+              </div>
             )}
 
             {result && (
               <div className="diagram-output-content">
-                {result.image_data ? (
-                  <div className="diagram-image-container">
-                    <img
-                      src={result.image_data}
-                      alt={`${result.diagram_type} diagram`}
-                      className="diagram-image"
-                    />
+                {renderError && (
+                  <div className="diagram-error" style={{ marginBottom: '1rem' }}>
+                    Render issue: {renderError}
                   </div>
-                ) : result.mermaid_code ? (
-                  <div className="diagram-fallback">
-                    <p className="diagram-error">
-                      {result.error || 'Diagram could not be rendered as image. Mermaid code is available below.'}
-                    </p>
-                    <details>
-                      <summary>View Mermaid Code</summary>
-                      <pre className="diagram-code-block">{result.mermaid_code}</pre>
-                    </details>
+                )}
+                <div className="diagram-render-container" ref={mermaidContainerRef}>
+                  <div className="diagram-render-loading">
+                    <span className="diagram-spinner"></span>
+                    Rendering diagram...
                   </div>
-                ) : (
-                  <p className="diagram-error">No diagram data available.</p>
+                </div>
+
+                {result.mermaid_code && (
+                  <details className="diagram-code-details">
+                    <summary>View Mermaid Source Code</summary>
+                    <pre className="diagram-code-block">{result.mermaid_code}</pre>
+                  </details>
                 )}
               </div>
             )}
@@ -306,4 +492,3 @@ export default function DiagramGenerator() {
     </div>
   );
 }
-

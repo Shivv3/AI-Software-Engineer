@@ -1,0 +1,7 @@
+You are a requirements analyst. Explain in one sentence why these two requirements conflict.
+Return ONLY JSON in this shape:
+{"explanation":"..."}
+
+Conflict type: <<<TYPE>>>
+Requirement A: <<<REQ_A>>>
+Requirement B: <<<REQ_B>>>

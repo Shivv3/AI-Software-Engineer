@@ -1,80 +1,125 @@
-# Project Setup
+# AI Software Engineer
 
-This repository contains one backend app and one frontend app:
+Full-SDLC workbench for requirements, design, implementation, validation, and ML-backed code intelligence.
 
-- `backend/` - Express API, SQLite database, LLM/document services
-- `frontend/` - React/Vite UI
+## Implemented Feature Layers
 
-## Getting Started
+- Core SDLC: projects, auth, SRS generation, design generation, diagram/schema generation, implementation lab, validation lab.
+- NLP/ML research layer: requirements quality analyzer, semantic conflict detector, defect risk predictor, requirements-to-code traceability, RAG retrieval support.
+- GenAI layer: multi-agent review panel, RAG project memory, requirement decomposer, adversarial requirement tester, closed-loop refactor flow.
 
-From the repository root:
+## Human Inputs Needed
 
-```bash
-npm run install:all
-npm run dev:backend
-npm run dev:frontend
+Create `.env` from `.env.example` and fill at least one LLM key:
+
+```env
+SESSION_SECRET=use-a-stable-random-32-char-secret
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key_optional_fallback
+ML_SERVICE_URL=http://127.0.0.1:8000
 ```
 
-The backend runs on port 4000 by default. The frontend dev server proxies `/api` requests to the backend.
+You also need Python 3.11+ or 3.12, Node.js 20+, npm, and enough disk space for Python ML dependencies. The first ML setup downloads spaCy/SBERT assets and can take several minutes.
 
-### Backend Only
+## One-Command Run
+
+### Windows PowerShell
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\start-all.ps1
+```
+
+This script installs Node dependencies, creates `ml-service\.venv`, installs Python dependencies, prepares models, trains the defect predictor if missing, starts the ML service and backend in the background, then runs the frontend in the foreground.
+
+Open the Vite URL, normally:
+
+```text
+http://localhost:5173
+```
+
+Stop background services:
+
+```powershell
+.\scripts\stop-all.ps1
+```
+
+### Git Bash / WSL / Linux / macOS
 
 ```bash
+bash scripts/start-all.sh
+```
+
+Stop background services:
+
+```bash
+bash scripts/stop-all.sh
+```
+
+## Manual Run
+
+Use this when you want separate terminals.
+
+```powershell
+npm --prefix backend install
+npm --prefix frontend install
+python -m venv ml-service\.venv
+ml-service\.venv\Scripts\python.exe -m pip install -r ml-service\requirements.txt
+```
+
+Prepare models and train the defect predictor:
+
+```powershell
+cd ml-service
+.\.venv\Scripts\python.exe -m spacy download en_core_web_sm
+.\.venv\Scripts\python.exe train_defect_model.py
+cd ..
+```
+
+Start services:
+
+```powershell
+cd ml-service
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+```powershell
 cd backend
-npm install
 npm run start
 ```
 
-### Frontend Only
-
-```bash
+```powershell
 cd frontend
-npm install
 npm run dev
 ```
 
-## Authentication
+## Smoke Tests
 
-The application now includes a complete authentication system:
+```powershell
+npm --prefix frontend run build
+node --check backend\server.js
+ml-service\.venv\Scripts\python.exe -B -c "import sys; sys.path.insert(0, 'ml-service'); import main; print('ml import ok')"
+```
 
-### Features
+Expected ports:
 
-- **User Registration**: Users can register with:
-  - Full Name (required)
-  - Email (required, unique)
-  - User ID (required, unique)
-  - Password (required, minimum 6 characters)
-  - Phone Number (optional)
-  - Age (optional)
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:4000`
+- ML service: `http://127.0.0.1:8000`
 
-- **User Login**: Users can login using their User ID and Password
+## Demo Flow
 
-- **Session Management**: Sessions are managed server-side using express-session
+1. Register or log in.
+2. Create/open a project.
+3. Generate or save an SRS and mark it as context in the sidebar.
+4. In SRS review, run Quality Analysis and Conflict Detection.
+5. Generate design/code artifacts and save useful outputs to the sidebar as context.
+6. Open Quality Center, paste code, run Tests & Quality.
+7. Switch to Intelligence and run Code Intelligence for defect risk plus traceability.
+8. Use the workspace home panels for Multi-Agent Reviews and RAG Project Memory.
 
-- **Protected Routes**: All project-related routes require authentication
+## Notes
 
-- **User-Specific Projects**: Each user's projects are stored separately and only accessible to them
-
-### Usage
-
-1. **First Time Users**: Navigate to `/auth` and click "Register" to create an account
-2. **Existing Users**: Navigate to `/auth` and login with your User ID and Password
-3. **After Login**: You'll be redirected to the projects dashboard where you can manage your projects
-4. **Logout**: Click the logout button in the top-right corner of the dashboard
-
-### Database
-
-User data and projects are stored in SQLite database (`backend/data/db.sqlite`). The database includes:
-- `users` table: Stores user credentials and profile information
-- `projects` table: Stores user-specific projects (linked via `user_id`)
-
-### API Endpoints
-
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login with user ID and password
-- `POST /api/auth/logout` - Logout current user
-- `GET /api/auth/me` - Get current user information
-- `GET /api/projects` - Get all projects for current user
-- `POST /api/project` - Create a new project
-- `GET /api/project/:id` - Get project details
-- `DELETE /api/project/:id` - Delete a project
+- If SBERT or spaCy models are not downloaded yet, the ML service now falls back to local lightweight analyzers so the app still starts.
+- LLM-backed routes still need `GEMINI_API_KEY` or `GROQ_API_KEY`.
+- Generated model/cache/runtime folders are ignored by git: `.run/`, `ml-service/.venv/`, `ml-service/model_cache/`, and `ml-service/models/`.

@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../lib/api';
 import ResultsPanel from './ResultsPanel';
 import { useProjectContext } from './ProjectContext';
+import RequirementDecomposerPanel from './RequirementDecomposerPanel';
+import AdversarialTesterPanel from './AdversarialTesterPanel';
 import './HomePage.css';
 
 export default function HomePage() {
@@ -445,6 +447,9 @@ export default function HomePage() {
           onDownloadImplicit={() => downloadText('implicit-requirements.txt', makeImplicitText())}
         />
       )}
+
+      <RequirementDecomposerPanel />
+      <AdversarialTesterPanel />
 
       {saveMessage && <p className="text-sm text-green-700 mt-2">{saveMessage}</p>}
     </div>

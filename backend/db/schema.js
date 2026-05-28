@@ -153,6 +153,68 @@ function initializeSchema(db) {
 
   ensureColumn(db, 'projects', 'user_id', 'TEXT');
   ensureColumn(db, 'project_documents', 'use_as_context', 'INTEGER DEFAULT 0');
+
+  // Fix srs_sections table: ensure it has ON DELETE CASCADE.
+  // If the table was created without cascade (old server.js inline CREATE TABLE),
+  // recreate it properly. SQLite requires recreating the table to change FK constraints.
+  try {
+    const fkInfo = db.prepare(`PRAGMA foreign_key_list(srs_sections)`).all();
+    const hasCascade = fkInfo.some(fk => fk.table === 'projects' && fk.on_delete === 'CASCADE');
+    if (!hasCascade && fkInfo.length > 0) {
+      // Recreate with cascade
+      db.exec(`PRAGMA foreign_keys = OFF`);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS srs_sections_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id TEXT,
+          section_id TEXT,
+          subsection_id TEXT,
+          content TEXT,
+          status TEXT DEFAULT 'draft',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          UNIQUE(project_id, section_id, subsection_id)
+        );
+        INSERT OR IGNORE INTO srs_sections_new SELECT * FROM srs_sections;
+        DROP TABLE srs_sections;
+        ALTER TABLE srs_sections_new RENAME TO srs_sections;
+      `);
+      db.exec(`PRAGMA foreign_keys = ON`);
+    }
+  } catch (e) {
+    // Table may not exist yet — schema creation above handles it
+  }
+
+  // Fix srs_versions table: ensure it has ON DELETE CASCADE.
+  try {
+    const fkInfo = db.prepare(`PRAGMA foreign_key_list(srs_versions)`).all();
+    const hasCascade = fkInfo.some(fk => fk.table === 'projects' && fk.on_delete === 'CASCADE');
+    if (!hasCascade && fkInfo.length > 0) {
+      db.exec(`PRAGMA foreign_keys = OFF`);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS srs_versions_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id TEXT,
+          version INTEGER,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+          editor TEXT CHECK(editor IN ('user', 'assistant')),
+          srs_content TEXT,
+          prompt_text TEXT,
+          suggestion_text TEXT,
+          selection_start INTEGER,
+          selection_end INTEGER,
+          FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        INSERT OR IGNORE INTO srs_versions_new SELECT * FROM srs_versions;
+        DROP TABLE srs_versions;
+        ALTER TABLE srs_versions_new RENAME TO srs_versions;
+      `);
+      db.exec(`PRAGMA foreign_keys = ON`);
+    }
+  } catch (e) {
+    // Table may not exist yet — schema creation above handles it
+  }
 }
 
 module.exports = { initializeSchema };

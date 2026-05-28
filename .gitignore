@@ -15,3 +15,15 @@ yarn-error.log*
 pnpm-debug.log*
 
 *.local
+
+.run/
+ml-service/model_cache/
+ml-service/models/
+ml-service/.venv/
+**/__pycache__/
+*.pyc
+
+venv/
+ml-service/venv/
+__pycache__/
+*.pyc

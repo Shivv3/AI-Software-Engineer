@@ -2530,6 +2530,33 @@ app.post('/api/ai/requirements/decompose', async (req, res) => {
 });
 
 app.post('/api/ai/requirements/adversarial', async (req, res) => {
+  const fallbackAdversarial = (requirement) => ({
+    personas: [
+      {
+        name: 'malicious user',
+        issues: [
+          `Try to abuse or bypass the requirement: ${requirement}`,
+          'Attempt denial-of-service, malformed input, replay, or unauthorized access around this requirement.',
+        ],
+      },
+      {
+        name: 'edge-case tester',
+        issues: [
+          'Test empty, null, duplicate, maximum-size, concurrent, and timeout scenarios.',
+          'Verify behavior at the exact limit, just below it, and just above it.',
+        ],
+      },
+      {
+        name: 'security auditor',
+        issues: [
+          'Verify authentication, authorization, audit logging, privacy, and data isolation controls.',
+          'Check whether failures reveal sensitive implementation details.',
+        ],
+      },
+    ],
+    fallback: true,
+  });
+
   try {
     const { requirement } = req.body || {};
     if (!requirement) {
@@ -2538,12 +2565,35 @@ app.post('/api/ai/requirements/adversarial', async (req, res) => {
     const promptTemplate = await loadPrompt('adversarial_stress_tester_prompt.txt');
     const prompt = promptTemplate.replace('<<<REQUIREMENT>>>', requirement);
     const raw = await callLLM(prompt, { task: 'fast' });
-    const parsed = parseLLMJson(raw);
+    let parsed;
+    try {
+      parsed = parseLLMJson(raw);
+    } catch {
+      parsed = {
+        personas: [
+          {
+            name: 'adversarial tester',
+            issues: [String(raw || '').trim() || 'No structured adversarial issues returned.'],
+          },
+        ],
+        raw_response: raw,
+      };
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      parsed = { personas: [], raw_response: raw };
+    }
+    if (!Array.isArray(parsed.personas)) {
+      parsed.personas = [];
+    }
     res.json(parsed);
   } catch (error) {
     console.error('Adversarial tester error:', error);
     if (error.message && error.message.includes('busy')) {
       return res.status(500).json({ error: error.message });
+    }
+    const { requirement } = req.body || {};
+    if (requirement) {
+      return res.json(fallbackAdversarial(requirement));
     }
     res.status(503).json({ error: 'Adversarial tester unavailable' });
   }

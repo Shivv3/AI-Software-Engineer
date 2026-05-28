@@ -48,6 +48,21 @@ export default function SRSEditor() {
 
   const activeProjectId = routeProjectId || projectId;
 
+  const saveFinalToSidebar = async (content, { silent = false } = {}) => {
+    if (!routeProjectId || !content?.trim()) return false;
+    await addDocument({
+      name: `${projectName || 'Project'} - SRS`,
+      type: 'SRS',
+      mime: 'text/plain',
+      content,
+      source: 'generated',
+      useAsContext: true,
+    });
+    setSaveMessage(silent ? 'SRS auto-saved to sidebar for downstream phases.' : 'Saved SRS to sidebar.');
+    setTimeout(() => setSaveMessage(''), 2000);
+    return true;
+  };
+
   const handleSaveFinalToSidebar = async () => {
     if (!routeProjectId) {
       alert('Open or create a project to save documents.');
@@ -57,16 +72,7 @@ export default function SRSEditor() {
       alert('Generate SRS content first.');
       return;
     }
-    await addDocument({
-      name: `${projectName || 'Project'} - SRS`,
-      type: 'SRS',
-      mime: 'text/plain',
-      content: finalSrsContent,
-      source: 'generated',
-      useAsContext: true,
-    });
-    setSaveMessage('Saved SRS to sidebar.');
-    setTimeout(() => setSaveMessage(''), 2000);
+    await saveFinalToSidebar(finalSrsContent);
   };
 
   const handleGenerateSRS = async () => {
@@ -213,7 +219,7 @@ export default function SRSEditor() {
     } else {
       // All sections complete
       setCurrentStep('review');
-      generateFinalSRS();
+      generateFinalSRS({ autoSave: true });
     }
   };
 
@@ -226,15 +232,18 @@ export default function SRSEditor() {
     }
   };
 
-  const generateFinalSRS = async () => {
+  const generateFinalSRS = async ({ autoSave = false } = {}) => {
     try {
-      const response = await api.post(`/srs/generate-final/${projectId}`);
+      const response = await api.post(`/srs/generate-final/${activeProjectId}`);
       setFinalSrsContent(response.data.content);
       setSrsStatus(prev => ({
         ...prev,
         completedSections: response.data.completedSections,
         totalSections: response.data.totalSections
       }));
+      if (autoSave) {
+        await saveFinalToSidebar(response.data.content, { silent: true });
+      }
     } catch (error) {
       console.error('Error generating final SRS:', error);
       alert('Failed to generate final SRS');
@@ -242,14 +251,14 @@ export default function SRSEditor() {
   };
 
   const loadSrsStatus = async () => {
-    if (!projectId) return;
+    if (!activeProjectId) return;
     
     try {
-      const response = await api.get(`/srs/status/${projectId}`);
+      const response = await api.get(`/srs/status/${activeProjectId}`);
       setSrsStatus(response.data);
       
       // Also generate current SRS content
-      const srsResponse = await api.post(`/srs/generate-final/${projectId}`);
+      const srsResponse = await api.post(`/srs/generate-final/${activeProjectId}`);
       setFinalSrsContent(srsResponse.data.content);
     } catch (error) {
       console.error('Error loading SRS status:', error);
@@ -257,7 +266,7 @@ export default function SRSEditor() {
   };
 
   const handleExportSRS = async () => {
-    if (!projectId) return;
+    if (!activeProjectId) return;
     
     try {
       setExportLoading(true);
@@ -266,7 +275,7 @@ export default function SRSEditor() {
       await generateFinalSRS();
       
       // Then export it
-      const response = await api.post(`/project/${projectId}/export`, {}, {
+      const response = await api.post(`/project/${activeProjectId}/export`, {}, {
         responseType: 'blob'
       });
       

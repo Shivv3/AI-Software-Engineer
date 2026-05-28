@@ -79,8 +79,19 @@ export default function UniversalHomePage() {
       accentClass: 'badge-yellow',
     },
     {
+      id: 'generate',
+      title: '4. Project Generator',
+      subtitle: 'Turn design into a runnable code folder',
+      description:
+        'Preview a full file manifest, choose source, test, and config files, stream generation progress, then download a ZIP or save directly to a folder.',
+      actionLabel: 'Generate Code Folder',
+      onClick: () => navigateWithProjectState('/generate'),
+      disabled: false,
+      accentClass: 'badge-cyan',
+    },
+    {
       id: 'testing',
-      title: '4. Testing & Quality',
+      title: '5. Testing & Quality',
       subtitle: 'Verification, validation and automation',
       description:
         'Auto-generate test cases, virtually execute them, and get concise failure reports with suggested fixes or improved code.',

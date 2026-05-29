@@ -49,7 +49,7 @@ export default function SRSEditor() {
   const activeProjectId = routeProjectId || projectId;
 
   const saveFinalToSidebar = async (content, { silent = false } = {}) => {
-    if (!routeProjectId || !content?.trim()) return false;
+    if (!activeProjectId || !content?.trim()) return false;
     await addDocument({
       name: `${projectName || 'Project'} - SRS`,
       type: 'SRS',
@@ -64,7 +64,7 @@ export default function SRSEditor() {
   };
 
   const handleSaveFinalToSidebar = async () => {
-    if (!routeProjectId) {
+    if (!activeProjectId) {
       alert('Open or create a project to save documents.');
       return;
     }
@@ -84,13 +84,14 @@ export default function SRSEditor() {
     try {
       setGenerateLoading(true);
       
-      // Create project
-      const projectRes = await api.post('/project', {
-        title: 'SRS Project',
-        project_text: projectDescription
-      });
-      
-      setProjectId(projectRes.data.id);
+      if (!routeProjectId) {
+        // Create project only if we are not already in one
+        const projectRes = await api.post('/project', {
+          title: 'SRS Project',
+          project_text: projectDescription
+        });
+        setProjectId(projectRes.data.id);
+      }
       
       // Generate questions
       const questionsRes = await api.post('/srs/generate-questions', {
@@ -182,7 +183,7 @@ export default function SRSEditor() {
 
     try {
       const saveData = {
-        project_id: projectId,
+        project_id: activeProjectId,
         section_id: srsStructure[currentSectionIndex].section_id.replace(/\./g, '_'),
         subsection_id: subsection.subsection_id.replace(/\./g, '_'),
         content: generatedContent,
@@ -349,12 +350,12 @@ export default function SRSEditor() {
     }
   };
 
-  // Load SRS status when projectId changes
+  // Load SRS status when activeProjectId changes
   useEffect(() => {
-    if (projectId && (currentStep === 'questions' || currentStep === 'progress' || currentStep === 'review')) {
+    if (activeProjectId && (currentStep === 'questions' || currentStep === 'progress' || currentStep === 'review')) {
       loadSrsStatus();
     }
-  }, [projectId, savedSections.length]);
+  }, [activeProjectId, savedSections.length]);
 
   const getProgressPercentage = () => {
     if (!srsStructure.length) return 0;
@@ -1087,7 +1088,7 @@ export default function SRSEditor() {
                 loading={conflictLoading}
                 error={conflictError}
                 conflicts={conflictResults?.conflict_pairs || []}
-                graph={conflictResults?.graph}
+                hasRun={!!conflictResults}
                 onAnalyze={handleDetectConflicts}
                 requirementsCount={extractRequirementsFromSrs(finalSrsContent).length}
               />

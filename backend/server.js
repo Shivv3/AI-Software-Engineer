@@ -1,4 +1,4 @@
-﻿const path = require('path');
+const path = require('path');
 const envPath = path.resolve(__dirname, '../.env');
 console.log('Loading .env from:', envPath);
 require('dotenv').config({ path: envPath });
@@ -1813,7 +1813,10 @@ app.post('/api/design/diagram', async (req, res) => {
     // Normalize whitespace: replace non-breaking spaces with normal spaces
     mermaidCode = mermaidCode.replace(/\u00a0/g, ' ');
 
-    // â”€â”€ Normalize graph edges (expand & separators) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Fix common LLM hallucination: -->|Label| > Node
+    mermaidCode = mermaidCode.replace(/-->\|([^|]+)\|\s*>/g, '-->|$1| ');
+
+    // ── Normalize graph edges (expand & separators) ──────────────────
     const normalizeGraphEdges = (code) => {
       const lines = code.split('\n');
       const normalized = [];
@@ -1993,9 +1996,7 @@ app.post('/api/ml/conflict/detect', async (req, res) => {
     });
 
     const conflicts = mlRes.conflict_pairs || [];
-    const explainTargets = conflicts
-      .filter((item) => item.confidence > 0.6)
-      .slice(0, 6);
+    const explainTargets = conflicts.filter((item) => item.confidence > 0.6).slice(0, 6);
 
     if (explainTargets.length > 0) {
       const promptTemplate = await loadPrompt('conflict_explanation_prompt.txt');
@@ -2008,17 +2009,22 @@ app.post('/api/ml/conflict/detect', async (req, res) => {
           try {
             const raw = await callLLM(prompt, { task: 'fast' });
             const parsed = parseLLMJson(raw);
-            return { key: `${item.req_a_index}-${item.req_b_index}`, explanation: parsed.explanation || raw };
+            return {
+              key: `${item.req_a_index}-${item.req_b_index}`,
+              explanation: parsed.explanation || raw,
+              resolution: parsed.resolution || '',
+            };
           } catch (err) {
-            return { key: `${item.req_a_index}-${item.req_b_index}`, explanation: '' };
+            return { key: `${item.req_a_index}-${item.req_b_index}`, explanation: '', resolution: '' };
           }
         })
       );
-      const map = new Map(results.map((r) => [r.key, r.explanation]));
+      const map = new Map(results.map((r) => [r.key, r]));
       conflicts.forEach((item) => {
         const key = `${item.req_a_index}-${item.req_b_index}`;
         if (map.has(key)) {
-          item.explanation = map.get(key);
+          item.explanation = map.get(key).explanation;
+          item.resolution = map.get(key).resolution;
         }
       });
     }
@@ -2053,14 +2059,7 @@ app.post('/api/ml/traceability/analyze', async (req, res) => {
     const { requirements, code_functions } = req.body || {};
     if (!Array.isArray(requirements) || !Array.isArray(code_functions)) {
       return res.status(422).json({ error: 'requirements and code_functions are required' });
-    }
-    const mlRes = await callMlService('/code/traceability/analyze', { requirements, code_functions });
-    res.json(mlRes);
-  } catch (error) {
-    console.error('ML traceability analyze error:', error);
-    res.status(503).json({ error: 'Traceability service unavailable' });
-  }
-});
+
 
 app.post('/api/ml/defect/refactor', async (req, res) => {
   try {
@@ -2092,6 +2091,14 @@ app.post('/api/ml/defect/refactor', async (req, res) => {
   } catch (error) {
     console.error('Closed-loop refactor error:', error);
     res.status(503).json({ error: 'Refactor service unavailable' });
+  }
+});
+    }
+    const mlRes = await callMlService('/code/traceability/analyze', { requirements, code_functions });
+    res.json(mlRes);
+  } catch (error) {
+    console.error('ML traceability analyze error:', error);
+    res.status(503).json({ error: 'Traceability service unavailable' });
   }
 });
 

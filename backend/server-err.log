@@ -1,0 +1,784 @@
+LLM gemini attempt 1 failed {
+  status: 429,
+  code: 'ERR_BAD_REQUEST',
+  message: 'Request failed with status code 429'
+}
+LLM gemini attempt 1 failed {
+  status: 429,
+  code: 'ERR_BAD_REQUEST',
+  message: 'Request failed with status code 429'
+}
+Received data URI in srs_text - this should have been extracted on frontend
+LLM gemini attempt 1 failed {
+  status: 503,
+  code: 'ERR_BAD_RESPONSE',
+  message: 'Request failed with status code 503'
+}
+LLM gemini attempt 1 failed {
+  status: 429,
+  code: 'ERR_BAD_REQUEST',
+  message: 'Request failed with status code 429'
+}
+LLM gemini attempt 2 failed {
+  status: undefined,
+  code: 'ECONNABORTED',
+  message: 'timeout of 60000ms exceeded'
+}
+LLM gemini attempt 1 failed {
+  status: 503,
+  code: 'ERR_BAD_RESPONSE',
+  message: 'Request failed with status code 503'
+}
+LLM gemini attempt 2 failed {
+  status: 503,
+  code: 'ERR_BAD_RESPONSE',
+  message: 'Request failed with status code 503'
+}
+LLM gemini attempt 1 failed {
+  status: 429,
+  code: 'ERR_BAD_REQUEST',
+  message: 'Request failed with status code 429'
+}
+LLM gemini attempt 1 failed {
+  status: 503,
+  code: 'ERR_BAD_RESPONSE',
+  message: 'Request failed with status code 503'
+}
+LLM gemini attempt 2 failed {
+  status: 503,
+  code: 'ERR_BAD_RESPONSE',
+  message: 'Request failed with status code 503'
+}
+Adversarial tester error: SyntaxError: Expected ',' or ']' after array element in JSON at position 892 (line 1 column 893)
+    at JSON.parse (<anonymous>)
+    at parseLLMJson (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\services\llmUtils.js:86:17)
+    at C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:2238:20
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+ML requirements analyze error: AxiosError: connect ECONNREFUSED 127.0.0.1:8000
+    at AxiosError.from (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:914:14)
+    at RedirectableRequest.handleRequestError (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:3515:25)
+    at RedirectableRequest.emit (node:events:530:35)
+    at eventHandlers.<computed> (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\follow-redirects\index.js:49:24)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+    at Axios.request (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:4731:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async callMlService (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:155:20)
+    at async C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:1955:19 {
+  port: 8000,
+  address: '127.0.0.1',
+  syscall: 'connect',
+  code: 'ECONNREFUSED',
+  errno: -4078,
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 60000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function [FormData]], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.2',
+      'Content-Length': '344',
+      'Accept-Encoding': 'gzip, compress, deflate, br'
+    },
+    method: 'post',
+    url: 'http://127.0.0.1:8000/nlp/requirements/analyze',
+    data: '{"requirements":["The system shall allow users to register with email and password.","Users must be able to create tasks with title and description.","The system should send email notifications when tasks are assigned.","The API must respond within 200ms for 95% of requests.","Users can delete their own tasks."],"project_id":"p1779995241427"}',
+    allowAbsoluteUrls: true
+  },
+  request: <ref *1> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      [Symbol(kState)]: 17580812,
+      [Symbol(kBufferedValue)]: null
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'http:',
+      path: '/nlp/requirements/analyze',
+      method: 'POST',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      http2Options: undefined,
+      hostname: '127.0.0.1',
+      port: '8000',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/nlp/requirements/analyze'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 344,
+    _requestBodyBuffers: [ [Object] ],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 7,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: false,
+      _last: false,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: true,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 344,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      _header: 'POST /nlp/requirements/analyze HTTP/1.1\r\n' +
+        'Accept: application/json, text/plain, */*\r\n' +
+        'Content-Type: application/json\r\n' +
+        'User-Agent: axios/1.13.2\r\n' +
+        'Content-Length: 344\r\n' +
+        'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+        'Host: 127.0.0.1:8000\r\n' +
+        'Connection: keep-alive\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'POST',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/nlp/requirements/analyze',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: null,
+      maxHeadersCount: null,
+      reusedSocket: false,
+      host: '127.0.0.1',
+      protocol: 'http:',
+      _redirectable: [Circular *1],
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false,
+      [Symbol(kBytesWritten)]: 0,
+      [Symbol(kNeedDrain)]: false,
+      [Symbol(corked)]: 0,
+      [Symbol(kChunkedBuffer)]: [],
+      [Symbol(kChunkedLength)]: 0,
+      [Symbol(kSocket)]: [Socket],
+      [Symbol(kOutHeaders)]: [Object: null prototype],
+      [Symbol(errored)]: null,
+      [Symbol(kHighWaterMark)]: 16384,
+      [Symbol(kRejectNonStandardBodyWrites)]: false,
+      [Symbol(kUniqueHeaders)]: null
+    },
+    _currentUrl: 'http://127.0.0.1:8000/nlp/requirements/analyze',
+    _timeout: null,
+    [Symbol(shapeMode)]: true,
+    [Symbol(kCapture)]: false
+  },
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:8000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 8000
+  }
+}
+ML conflict detect error: AxiosError: connect ECONNREFUSED 127.0.0.1:8000
+    at AxiosError.from (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:914:14)
+    at RedirectableRequest.handleRequestError (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:3515:25)
+    at RedirectableRequest.emit (node:events:530:35)
+    at eventHandlers.<computed> (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\follow-redirects\index.js:49:24)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+    at Axios.request (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:4731:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async callMlService (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:155:20)
+    at async C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:2005:19 {
+  port: 8000,
+  address: '127.0.0.1',
+  syscall: 'connect',
+  code: 'ECONNREFUSED',
+  errno: -4078,
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 60000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function [FormData]], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.2',
+      'Content-Length': '344',
+      'Accept-Encoding': 'gzip, compress, deflate, br'
+    },
+    method: 'post',
+    url: 'http://127.0.0.1:8000/nlp/conflict/detect',
+    data: '{"requirements":["The system shall allow users to register with email and password.","Users must be able to create tasks with title and description.","The system should send email notifications when tasks are assigned.","The API must respond within 200ms for 95% of requests.","Users can delete their own tasks."],"project_id":"p1779995241427"}',
+    allowAbsoluteUrls: true
+  },
+  request: <ref *1> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      [Symbol(kState)]: 17580812,
+      [Symbol(kBufferedValue)]: null
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'http:',
+      path: '/nlp/conflict/detect',
+      method: 'POST',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      http2Options: undefined,
+      hostname: '127.0.0.1',
+      port: '8000',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/nlp/conflict/detect'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 344,
+    _requestBodyBuffers: [ [Object] ],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 7,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: false,
+      _last: false,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: true,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 344,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      _header: 'POST /nlp/conflict/detect HTTP/1.1\r\n' +
+        'Accept: application/json, text/plain, */*\r\n' +
+        'Content-Type: application/json\r\n' +
+        'User-Agent: axios/1.13.2\r\n' +
+        'Content-Length: 344\r\n' +
+        'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+        'Host: 127.0.0.1:8000\r\n' +
+        'Connection: keep-alive\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'POST',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/nlp/conflict/detect',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: null,
+      maxHeadersCount: null,
+      reusedSocket: false,
+      host: '127.0.0.1',
+      protocol: 'http:',
+      _redirectable: [Circular *1],
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false,
+      [Symbol(kBytesWritten)]: 0,
+      [Symbol(kNeedDrain)]: false,
+      [Symbol(corked)]: 0,
+      [Symbol(kChunkedBuffer)]: [],
+      [Symbol(kChunkedLength)]: 0,
+      [Symbol(kSocket)]: [Socket],
+      [Symbol(kOutHeaders)]: [Object: null prototype],
+      [Symbol(errored)]: null,
+      [Symbol(kHighWaterMark)]: 16384,
+      [Symbol(kRejectNonStandardBodyWrites)]: false,
+      [Symbol(kUniqueHeaders)]: null
+    },
+    _currentUrl: 'http://127.0.0.1:8000/nlp/conflict/detect',
+    _timeout: null,
+    [Symbol(shapeMode)]: true,
+    [Symbol(kCapture)]: false
+  },
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:8000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 8000
+  }
+}
+ML defect predict error: AxiosError: connect ECONNREFUSED 127.0.0.1:8000
+    at AxiosError.from (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:914:14)
+    at RedirectableRequest.handleRequestError (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:3515:25)
+    at RedirectableRequest.emit (node:events:530:35)
+    at eventHandlers.<computed> (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\follow-redirects\index.js:49:24)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+    at Axios.request (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:4731:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async callMlService (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:155:20)
+    at async C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:2058:19 {
+  port: 8000,
+  address: '127.0.0.1',
+  syscall: 'connect',
+  code: 'ECONNREFUSED',
+  errno: -4078,
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 60000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function [FormData]], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.2',
+      'Content-Length': '74',
+      'Accept-Encoding': 'gzip, compress, deflate, br'
+    },
+    method: 'post',
+    url: 'http://127.0.0.1:8000/code/defect/predict',
+    data: '{"code":"function divide(a, b) { return a / b; }","language":"javascript"}',
+    allowAbsoluteUrls: true
+  },
+  request: <ref *1> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      [Symbol(kState)]: 17580812,
+      [Symbol(kBufferedValue)]: null
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'http:',
+      path: '/code/defect/predict',
+      method: 'POST',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      http2Options: undefined,
+      hostname: '127.0.0.1',
+      port: '8000',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/code/defect/predict'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 74,
+    _requestBodyBuffers: [ [Object] ],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 7,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: false,
+      _last: false,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: true,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 74,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      _header: 'POST /code/defect/predict HTTP/1.1\r\n' +
+        'Accept: application/json, text/plain, */*\r\n' +
+        'Content-Type: application/json\r\n' +
+        'User-Agent: axios/1.13.2\r\n' +
+        'Content-Length: 74\r\n' +
+        'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+        'Host: 127.0.0.1:8000\r\n' +
+        'Connection: keep-alive\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'POST',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/code/defect/predict',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: null,
+      maxHeadersCount: null,
+      reusedSocket: false,
+      host: '127.0.0.1',
+      protocol: 'http:',
+      _redirectable: [Circular *1],
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false,
+      [Symbol(kBytesWritten)]: 0,
+      [Symbol(kNeedDrain)]: false,
+      [Symbol(corked)]: 0,
+      [Symbol(kChunkedBuffer)]: [],
+      [Symbol(kChunkedLength)]: 0,
+      [Symbol(kSocket)]: [Socket],
+      [Symbol(kOutHeaders)]: [Object: null prototype],
+      [Symbol(errored)]: null,
+      [Symbol(kHighWaterMark)]: 16384,
+      [Symbol(kRejectNonStandardBodyWrites)]: false,
+      [Symbol(kUniqueHeaders)]: null
+    },
+    _currentUrl: 'http://127.0.0.1:8000/code/defect/predict',
+    _timeout: null,
+    [Symbol(shapeMode)]: true,
+    [Symbol(kCapture)]: false
+  },
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:8000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 8000
+  }
+}
+ML traceability analyze error: AxiosError: connect ECONNREFUSED 127.0.0.1:8000
+    at AxiosError.from (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:914:14)
+    at RedirectableRequest.handleRequestError (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:3515:25)
+    at RedirectableRequest.emit (node:events:530:35)
+    at eventHandlers.<computed> (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\follow-redirects\index.js:49:24)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+    at Axios.request (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\node_modules\axios\dist\node\axios.cjs:4731:41)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async callMlService (C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:155:20)
+    at async C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\backend\server.js:2072:19 {
+  port: 8000,
+  address: '127.0.0.1',
+  syscall: 'connect',
+  code: 'ECONNREFUSED',
+  errno: -4078,
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 60000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function [FormData]], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.2',
+      'Content-Length': '393',
+      'Accept-Encoding': 'gzip, compress, deflate, br'
+    },
+    method: 'post',
+    url: 'http://127.0.0.1:8000/code/traceability/analyze',
+    data: '{"requirements":["The system shall allow users to register with email and password.","Users must be able to create tasks with title and description.","The system should send email notifications when tasks are assigned.","The API must respond within 200ms for 95% of requests.","Users can delete their own tasks."],"code_functions":["registerUser","createTask","sendNotification","deleteTask"]}',
+    allowAbsoluteUrls: true
+  },
+  request: <ref *1> Writable {
+    _events: {
+      close: undefined,
+      error: [Function: handleRequestError],
+      prefinish: undefined,
+      finish: undefined,
+      drain: undefined,
+      response: [Function: handleResponse],
+      socket: [Array],
+      timeout: undefined,
+      abort: undefined
+    },
+    _writableState: WritableState {
+      highWaterMark: 16384,
+      length: 0,
+      corked: 0,
+      onwrite: [Function: bound onwrite],
+      writelen: 0,
+      bufferedIndex: 0,
+      pendingcb: 0,
+      [Symbol(kState)]: 17580812,
+      [Symbol(kBufferedValue)]: null
+    },
+    _maxListeners: undefined,
+    _options: {
+      maxRedirects: 21,
+      maxBodyLength: Infinity,
+      protocol: 'http:',
+      path: '/code/traceability/analyze',
+      method: 'POST',
+      headers: [Object: null prototype],
+      agents: [Object],
+      auth: undefined,
+      family: undefined,
+      beforeRedirect: [Function: dispatchBeforeRedirect],
+      beforeRedirects: [Object],
+      http2Options: undefined,
+      hostname: '127.0.0.1',
+      port: '8000',
+      agent: undefined,
+      nativeProtocols: [Object],
+      pathname: '/code/traceability/analyze'
+    },
+    _ended: true,
+    _ending: true,
+    _redirectCount: 0,
+    _redirects: [],
+    _requestBodyLength: 393,
+    _requestBodyBuffers: [ [Object] ],
+    _eventsCount: 3,
+    _onNativeResponse: [Function (anonymous)],
+    _currentRequest: ClientRequest {
+      _events: [Object: null prototype],
+      _eventsCount: 7,
+      _maxListeners: undefined,
+      outputData: [],
+      outputSize: 0,
+      writable: true,
+      destroyed: false,
+      _last: false,
+      chunkedEncoding: false,
+      shouldKeepAlive: true,
+      maxRequestsOnConnectionReached: false,
+      _defaultKeepAlive: true,
+      useChunkedEncodingByDefault: true,
+      sendDate: false,
+      _removedConnection: false,
+      _removedContLen: false,
+      _removedTE: false,
+      strictContentLength: false,
+      _contentLength: 393,
+      _hasBody: true,
+      _trailer: '',
+      finished: true,
+      _headerSent: true,
+      _closed: false,
+      _header: 'POST /code/traceability/analyze HTTP/1.1\r\n' +
+        'Accept: application/json, text/plain, */*\r\n' +
+        'Content-Type: application/json\r\n' +
+        'User-Agent: axios/1.13.2\r\n' +
+        'Content-Length: 393\r\n' +
+        'Accept-Encoding: gzip, compress, deflate, br\r\n' +
+        'Host: 127.0.0.1:8000\r\n' +
+        'Connection: keep-alive\r\n' +
+        '\r\n',
+      _keepAliveTimeout: 0,
+      _onPendingData: [Function: nop],
+      agent: [Agent],
+      socketPath: undefined,
+      method: 'POST',
+      maxHeaderSize: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      path: '/code/traceability/analyze',
+      _ended: false,
+      res: null,
+      aborted: false,
+      timeoutCb: [Function: emitRequestTimeout],
+      upgradeOrConnect: false,
+      parser: null,
+      maxHeadersCount: null,
+      reusedSocket: false,
+      host: '127.0.0.1',
+      protocol: 'http:',
+      _redirectable: [Circular *1],
+      [Symbol(shapeMode)]: false,
+      [Symbol(kCapture)]: false,
+      [Symbol(kBytesWritten)]: 0,
+      [Symbol(kNeedDrain)]: false,
+      [Symbol(corked)]: 0,
+      [Symbol(kChunkedBuffer)]: [],
+      [Symbol(kChunkedLength)]: 0,
+      [Symbol(kSocket)]: [Socket],
+      [Symbol(kOutHeaders)]: [Object: null prototype],
+      [Symbol(errored)]: null,
+      [Symbol(kHighWaterMark)]: 16384,
+      [Symbol(kRejectNonStandardBodyWrites)]: false,
+      [Symbol(kUniqueHeaders)]: null
+    },
+    _currentUrl: 'http://127.0.0.1:8000/code/traceability/analyze',
+    _timeout: null,
+    [Symbol(shapeMode)]: true,
+    [Symbol(kCapture)]: false
+  },
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:8000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 8000
+  }
+}

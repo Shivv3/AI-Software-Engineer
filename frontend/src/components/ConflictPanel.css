@@ -1,110 +1,383 @@
-.conflict-panel {
+/* ── Conflict Panel ──────────────────────────────────────── */
+.cf-panel {
   margin-top: 1.5rem;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 1rem;
-  padding: 1.25rem;
-  color: #e2e8f0;
 }
 
-.conflict-panel-head {
+/* Header */
+.cf-panel-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 1rem;
-  align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
 }
 
-.conflict-panel-head h3 {
+.cf-panel-title {
   margin: 0 0 0.25rem 0;
   font-size: 1.1rem;
+  font-weight: 700;
+  color: #f1f5f9;
 }
 
-.conflict-panel-head p {
+.cf-panel-subtitle {
   margin: 0;
   color: #94a3b8;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
-.conflict-button {
+/* Detect button */
+.cf-detect-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: 0;
+  border: none;
   border-radius: 0.75rem;
-  padding: 0.6rem 1rem;
-  color: white;
+  padding: 0.65rem 1.25rem;
+  color: #fff;
   font-weight: 600;
+  font-size: 0.875rem;
   cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s, transform 0.2s;
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
 }
 
-.conflict-button:disabled {
-  opacity: 0.6;
+.cf-detect-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.cf-detect-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.conflict-error {
-  background: rgba(239, 68, 68, 0.15);
+/* Error */
+.cf-error {
+  background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.35);
   color: #fca5a5;
   padding: 0.75rem 1rem;
   border-radius: 0.75rem;
   margin-bottom: 1rem;
+  font-size: 0.875rem;
 }
 
-.conflict-graph {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  border-radius: 0.75rem;
-  padding: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.conflict-list {
-  display: grid;
+/* Stats bar */
+.cf-stats-bar {
+  display: flex;
   gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
 }
 
-.conflict-card {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+.cf-stat {
+  flex: 1;
+  min-width: 90px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;
+  text-align: center;
 }
 
-.conflict-card-head {
+.cf-stat-number {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cf-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cf-stat-total   .cf-stat-number { color: #e2e8f0; }
+.cf-stat-high    .cf-stat-number { color: #f87171; }
+.cf-stat-medium  .cf-stat-number { color: #fbbf24; }
+.cf-stat-low     .cf-stat-number { color: #6ee7b7; }
+
+/* List */
+.cf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/* Card */
+.cf-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 0.875rem;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.cf-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Card header row */
+.cf-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.conflict-type {
-  padding: 0.2rem 0.6rem;
+.cf-card-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cf-card-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cf-index {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  min-width: 1.5rem;
+}
+
+/* Type badge */
+.cf-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: capitalize;
-  color: #f8fafc;
 }
 
-.conflict-score {
-  font-size: 0.8rem;
-  color: #94a3b8;
+/* Severity */
+.cf-severity {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.conflict-text {
+.severity-high   { background: rgba(239,68,68,0.18);  color: #f87171; }
+.severity-medium { background: rgba(251,191,36,0.18); color: #fbbf24; }
+.severity-low    { background: rgba(110,231,183,0.18);color: #6ee7b7; }
+
+.cf-confidence {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.cf-chevron {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+/* Requirements table */
+.cf-req-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.cf-req-table th {
+  background: rgba(30, 41, 59, 0.5);
+  padding: 0.45rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.cf-req-table th:first-child {
+  border-right: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.cf-req-table td {
+  padding: 0.75rem 1rem;
   font-size: 0.85rem;
   color: #e2e8f0;
-  margin-bottom: 0.35rem;
+  vertical-align: top;
+  line-height: 1.55;
+  width: 50%;
 }
 
-.conflict-explanation {
-  font-size: 0.85rem;
-  color: #cbd5e1;
-  margin-top: 0.5rem;
+.cf-req-table td:first-child {
+  border-right: 1px solid rgba(148, 163, 184, 0.08);
 }
 
-.conflict-empty {
-  text-align: center;
+/* Expanded detail area */
+.cf-detail {
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cf-section {
+  padding: 0.875rem 1rem;
+}
+
+.cf-section-explain {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.cf-section-resolve {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.cf-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: #94a3b8;
-  padding: 1rem 0;
+  margin-bottom: 0.5rem;
 }
+
+.cf-section-icon {
+  font-size: 0.85rem;
+}
+
+.cf-section-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+.cf-section-explain .cf-section-text { color: #a5b4fc; }
+.cf-section-resolve .cf-section-text  { color: #6ee7b7; }
+
+.cf-no-detail {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Toggle button */
+.cf-toggle-btn {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  color: #667eea;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.cf-toggle-btn:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+/* Empty / loading states */
+.cf-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.cf-idle-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cf-idle-icon {
+  font-size: 2.5rem;
+  opacity: 0.6;
+}
+
+.cf-idle-state p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.cf-idle-sub {
+  font-size: 0.8rem !important;
+  color: #64748b !important;
+}
+
+.cf-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+/* Spinners */
+.cf-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cf-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: cf-spin 0.8s linear infinite;
+}
+
+.cf-spinner-large {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(102,126,234,0.2);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: cf-spin 1s linear infinite;
+}
+
+@keyframes cf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cf-success-state {
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 0.875rem;
+  padding: 2rem 1rem;
+}
+.cf-success-state .cf-idle-icon {
+  opacity: 1;
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+

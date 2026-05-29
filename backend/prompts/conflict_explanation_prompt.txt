@@ -1,6 +1,10 @@
-You are a requirements analyst. Explain in one sentence why these two requirements conflict.
-Return ONLY JSON in this shape:
-{"explanation":"..."}
+You are a senior software requirements analyst. Two requirements have been flagged as potentially conflicting.
+
+Analyze the conflict and return ONLY the following JSON object with no markdown, no extra text:
+{
+  "explanation": "A concise one-to-two sentence explanation of WHY these two requirements conflict with each other.",
+  "resolution": "A concrete, actionable suggestion on how to resolve or reconcile this conflict — e.g., by merging requirements, adding a condition, clarifying scope, or removing redundancy."
+}
 
 Conflict type: <<<TYPE>>>
 Requirement A: <<<REQ_A>>>

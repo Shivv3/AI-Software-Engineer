@@ -1,7 +1,75 @@
+
+> backend@1.0.0 start
+> node server.js
+
 Loading .env from: C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\.env
-[dotenv@17.2.3] injecting env (8) from ..\.env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (15) from ..\.env -- tip: ⚙️  suppress all logs with { quiet: true }
 Loading LLM .env from: C:\Users\shiva\OneDrive\Desktop\Work\4th year-DTU\Major Project\AI-Software-Engineer\.env
-[dotenv@17.2.3] injecting env (0) from ..\.env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from ..\.env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
 mammoth loaded successfully
 Database schema initialized safely.
 Server running on port 4000
+LLM [code] → gemini attempt 1/2
+LLM [code] → gemini attempt 2/2
+LLM [code]: succeeded via gemini
+Calling LLM with prompt: System role: You are an experienced software architect. 
+Input: A short project description and constraints.
+
+Task: Recommend the single best SDLC model (choose from: Waterfall, Agile (Scrum), Kanban, Spiral, V-Model), explain why, provide when_not_to_use, and a confidence score 0-1.
+
+Return ONLY JSON that matches this schema:
+{"model":"","why":"","when_not_to_use":"","confidence":0.0}
+
+User project: Build a task management web app for small teams with user auth, task CRUD, and notifications.
+Constraints:
+{
+  "team_size": 3,
+  "deadline": "6 months",
+  "budget": "low"
+}
+LLM [fast] → gemini attempt 1/2
+Raw LLM response: {
+  "model": "Agile (Scrum)",
+  "why": "Scrum is the best fit for this project due to its iterative and incremental nature, which is highly beneficial for developing a web application where user feedback and evolving requirements are common. The small team size (3) is ideal for a self-organizing Scrum team. The 6-month deadline can be effectively managed through time-boxed sprints, delivering working software frequently and allowing for continuous adaptation. A low budget benefits from Scrum's efficiency, focus on delivering early value, and ability to pivot quickly, reducing the risk of wasted effort on features that don't meet user needs. Core features like user auth and task CRUD are well-understood, but the specific user experience and additional nuances for 'small teams' will greatly benefit from iterative refinement.",
+  "when_not_to_use": "Scrum may not be suitable for projects with extremely stable and unchanging requirements that are fully understood and documented from the outset, or for projects where stakeholders are unable or unwilling to actively participate in feedback and review sessions. It can also be challenging if the team lacks self-organization and discipline, or if the project demands strict, upfront, and comprehensive documentation for regulatory compliance without any flexibility for changes.",
+  "confidence": 0.95
+}
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 2/2
+LLM [fast]: succeeded via gemini
+LLM [fast] → gemini attempt 1/2
+Calling LLM for system design with SRS length: 178 chars
+LLM [reasoning] → gemini attempt 1/2
+Calling LLM for schema design. Input length: 178 chars
+LLM [reasoning] → gemini attempt 1/2
+LLM [reasoning] → gemini attempt 2/2
+LLM [reasoning]: succeeded via gemini
+Calling LLM for sequence diagram generation
+LLM [creative] → gemini attempt 1/2
+LLM [code] → gemini attempt 1/2
+LLM [code] → gemini attempt 1/2
+LLM [code] → gemini attempt 1/2
+LLM [code] → gemini attempt 2/2
+LLM [code] → groq attempt 1/2
+Groq: succeeded with model llama-3.3-70b-versatile
+LLM [code]: succeeded via groq
+LLM [review] → gemini attempt 1/2
+LLM [review] → gemini attempt 2/2
+LLM [review] → groq attempt 1/2
+Groq: succeeded with model llama-3.3-70b-versatile
+LLM [review]: succeeded via groq
+LLM [review] → gemini attempt 1/2
+LLM [review] → gemini attempt 1/2
+LLM [review] → gemini attempt 1/2
+LLM [review] → gemini attempt 2/2
+LLM [review]: succeeded via gemini
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 2/2
+LLM [fast] → groq attempt 1/2
+Groq: succeeded with model llama-3.3-70b-versatile
+LLM [fast]: succeeded via groq
+LLM [fast] → gemini attempt 1/2
+LLM [fast] → gemini attempt 1/2

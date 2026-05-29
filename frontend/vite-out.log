@@ -1,0 +1,15 @@
+
+> frontend@0.0.0 dev
+> vite --host 127.0.0.1
+
+Re-optimizing dependencies because lockfile has changed
+
+  [32m[1mVITE[22m v5.4.11[39m  [2mready in [0m[1m726[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
+[2m12:47:14 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/HomePage.jsx[22m
+[2m1:17:53 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/HomePage.jsx[22m
+[2m1:24:46 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SystemDesignWizard.jsx[22m
+[2m1:24:46 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/UniversalHomePage.css[22m
+[2m1:24:46 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/UniversalHomePage.jsx[22m
+[2m1:24:46 am[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SRSEditor.jsx[22m

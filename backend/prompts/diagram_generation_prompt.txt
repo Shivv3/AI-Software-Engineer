@@ -42,6 +42,7 @@ Instructions:
 ❌ Incorrect (do NOT do this):
 graph TD
   A[User] --> B[Server]: Sends Request
+  A[User] -->|Sends Request| > B[Server]
 
 ✅ Correct (do this):
 graph TD

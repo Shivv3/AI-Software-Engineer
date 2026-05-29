@@ -11,20 +11,21 @@ Inputs:
 
 Instructions:
 - Return ONLY JSON, no code fences, no markdown.
-- Provide a 1-2 sentence summary only.
-- Keep notes concise; focus on differences or caveats.
-- Preserve algorithms, data structures, and edge-case handling.
-- Use idiomatic patterns in the target language.
+- Translate the COMPLETE source. Do not drop, abbreviate, or stub any logic.
+- Preserve algorithms, data structures, edge-case handling, and behavior exactly.
+- Use idiomatic patterns, naming, and error handling in the target language.
+- Format the translated code across MULTIPLE LINES with correct indentation. Never collapse statements onto one line with semicolons. Encode line breaks as \n inside the JSON string.
+- Provide a 1-2 sentence summary; keep notes focused on meaningful differences or caveats.
 
 Output JSON schema:
 {
   "target_language": "string",
-  "code": "string - translated code",
+  "code": "string - the complete, multi-line translated code",
   "summary": "string - 1-2 sentences",
   "notes": "string | null - short differences or caveats",
   "assumptions": "string | null",
   "warnings": "string | null"
 }
 
-Remember: no code fences and no extra commentary.*** End Patch
+Remember: no code fences and no extra commentary.
 

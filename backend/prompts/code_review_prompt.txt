@@ -43,5 +43,5 @@ Output JSON schema:
   "recommendations_summary": "string - short list-style text with the top things to fix first"
 }
 
-Remember: no code fences, no markdown, and no extra commentary outside this JSON structure.*** End Patch
+Remember: no code fences, no markdown, and no extra commentary outside this JSON structure.
 

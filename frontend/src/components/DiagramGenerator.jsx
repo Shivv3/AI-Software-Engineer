@@ -3,6 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useProjectContext } from './ProjectContext';
 import './DiagramGenerator.css';
 
+function removeMermaidErrorArtifacts(container) {
+  document.querySelectorAll('.mermaidTooltip').forEach((el) => el.remove());
+  document.querySelectorAll('svg').forEach((svg) => {
+    if (!container?.contains(svg) && svg.textContent?.includes('Syntax error in text')) {
+      svg.remove();
+    }
+  });
+}
+
 export default function DiagramGenerator() {
   const navigate = useNavigate();
   const { projectId } = useParams();
@@ -17,6 +26,7 @@ export default function DiagramGenerator() {
   const [result, setResult] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
   const [renderError, setRenderError] = useState('');
+  const [renderReady, setRenderReady] = useState(false);
 
   const mermaidContainerRef = useRef(null);
   const renderIdRef = useRef(0);
@@ -71,6 +81,7 @@ export default function DiagramGenerator() {
             sequenceNumberColor: '#8b5cf6',
           },
           securityLevel: 'loose',
+          suppressErrorRendering: true,
           fontFamily: '"Inter", "Segoe UI", system-ui, sans-serif',
         });
         resolve(window.mermaid);
@@ -83,25 +94,25 @@ export default function DiagramGenerator() {
   const renderMermaidDiagram = useCallback(async (code) => {
     if (!code || !mermaidContainerRef.current) return;
     setRenderError('');
+    setRenderReady(false);
     renderIdRef.current += 1;
     const thisRenderId = renderIdRef.current;
 
     try {
       const mermaid = await loadMermaid();
-      // Clear container
+      removeMermaidErrorArtifacts(mermaidContainerRef.current);
       mermaidContainerRef.current.innerHTML = '';
 
-      // Create a fresh element for rendering
-      const uniqueId = `mermaid-diagram-${Date.now()}`;
-      const el = document.createElement('div');
-      el.id = uniqueId;
-      el.textContent = code;
-      mermaidContainerRef.current.appendChild(el);
+      if (typeof mermaid.parse === 'function') {
+        const valid = await mermaid.parse(code, { suppressErrors: true });
+        if (valid === false) throw new Error('Invalid Mermaid syntax');
+      }
 
-      // Render
+      const uniqueId = `mermaid-diagram-${Date.now()}-${thisRenderId}`;
       const { svg } = await mermaid.render(uniqueId + '-svg', code);
       if (thisRenderId !== renderIdRef.current) return; // stale render
       mermaidContainerRef.current.innerHTML = svg;
+      removeMermaidErrorArtifacts(mermaidContainerRef.current);
 
       // Style the rendered SVG
       const svgEl = mermaidContainerRef.current.querySelector('svg');
@@ -109,14 +120,16 @@ export default function DiagramGenerator() {
         svgEl.style.maxWidth = '100%';
         svgEl.style.height = 'auto';
         svgEl.style.borderRadius = '0.75rem';
+        setRenderReady(true);
       }
     } catch (err) {
       if (thisRenderId !== renderIdRef.current) return;
       console.error('Mermaid render error:', err);
-      setRenderError(err.message || 'Failed to render diagram');
-      // Show the raw mermaid code as fallback
+      setRenderError('Diagram preview unavailable. Mermaid source is still available below.');
+      setRenderReady(false);
+      removeMermaidErrorArtifacts(mermaidContainerRef.current);
       if (mermaidContainerRef.current) {
-        mermaidContainerRef.current.innerHTML = `<pre class="diagram-code-block">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+        mermaidContainerRef.current.innerHTML = '<div class="diagram-render-fallback">Preview unavailable. Open the Mermaid source below.</div>';
       }
     }
   }, [loadMermaid]);
@@ -187,6 +200,8 @@ export default function DiagramGenerator() {
     setStatus('');
     setSaveMessage('');
     setRenderError('');
+    setRenderReady(false);
+    setResult(null);
 
     if (!diagramType) {
       setError('Please select a diagram type.');
@@ -431,7 +446,7 @@ export default function DiagramGenerator() {
                 <button
                   className="diagram-action"
                   onClick={handleDownload}
-                  disabled={!result?.mermaid_code}
+                  disabled={!result?.mermaid_code || !renderReady || Boolean(renderError)}
                   title="Download as PNG"
                 >
                   ⬇ PNG

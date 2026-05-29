@@ -54,6 +54,11 @@ class ApiKeyPool {
         if (entry) entry.cooldownUntil = Date.now() + ms;
     }
 
+    hasAvailableKeys() {
+        const now = Date.now();
+        return this.entries.some((entry) => !entry.cooldownUntil || entry.cooldownUntil <= now);
+    }
+
     getStatus() {
         const now = Date.now();
         return this.entries.map((entry) => ({
@@ -144,12 +149,16 @@ const PROVIDERS = [
                 if (!text) throw new Error('Invalid response format from Gemini API');
                 return text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
             } catch (err) {
-                if (err.response?.status === 429) {
+                const s = err.response?.status;
+                if (s === 429) {
                     geminiKeyPool.markCooldown(keyEntry);
+                } else if (s === 401 || s === 403 || s === 402) {
+                    geminiKeyPool.markCooldown(keyEntry, 5 * 60 * 1000);
                 }
                 throw err;
             }
         },
+        pool: geminiKeyPool,
         isTransient: (err) => {
             const s = err.response?.status;
             return err.code === 'ECONNABORTED' || s === 429 || s === 503 || s === 500;
@@ -198,6 +207,7 @@ const PROVIDERS = [
     // ── Groq (multi-model rotation) ─────────────────────────────────────────
     {
         name: 'groq',
+        pool: groqKeyPool,
         available: () => groqKeyPool.hasKeys(),
         call: async (prompt, _modelOverride) => {
             const keyEntry = groqKeyPool.getNextKey();
@@ -239,8 +249,12 @@ const PROVIDERS = [
                         groqKeyPool.markCooldown(keyEntry);
                         throw err;
                     }
-                    // If auth error, no point trying other models — same key
-                    if (status === 401 || status === 403) throw err;
+                    // Auth error on this key — cool it down so the caller rotates
+                    // to the next key instead of disabling the whole provider.
+                    if (status === 401 || status === 403 || status === 402) {
+                        groqKeyPool.markCooldown(keyEntry, 5 * 60 * 1000);
+                        throw err;
+                    }
                     // For rate limit or transient errors, try next model
                     if (status === 429 || status === 503 || status === 500 || err.code === 'ECONNABORTED') {
                         continue;
@@ -364,7 +378,10 @@ class LLMService {
         let lastError;
 
         for (const provider of available) {
-            const maxAttempts = 2;
+            // Pooled providers can rotate across keys, so allow one attempt per key
+            // (capped) before giving up; single-key providers keep two attempts.
+            const poolSize = provider.pool ? Math.max(1, provider.pool.entries.length) : 1;
+            const maxAttempts = provider.pool ? Math.min(poolSize, 6) : 2;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     await rateLimiter.tryAcquire();
@@ -383,6 +400,13 @@ class LLMService {
                     });
 
                     if (provider.isFatal(error)) {
+                        // For key-pool providers the failing key was already cooled
+                        // down; rotate to the next available key instead of nuking
+                        // the entire provider for everyone.
+                        if (provider.pool && provider.pool.hasAvailableKeys() && attempt < maxAttempts) {
+                            console.warn(`${provider.name}: auth error on one key, rotating to next key`);
+                            continue;
+                        }
                         console.warn(`${provider.name}: auth error, disabling for 5 minutes`);
                         this._disabledProviders.set(provider.name, Date.now() + 5 * 60 * 1000);
                         break; // try next provider immediately

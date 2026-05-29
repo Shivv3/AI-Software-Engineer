@@ -428,6 +428,12 @@
   font-size: 0.9rem;
 }
 
+.diagram-render-fallback {
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 /* ── Code Details ────────────────────────────────────────────────────── */
 
 .diagram-code-details {

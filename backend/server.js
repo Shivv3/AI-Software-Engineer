@@ -113,6 +113,12 @@ async function callLLM(promptText, options = {}) {
     if (error.message.includes('Rate limit exceeded')) {
       throw new Error('Server is busy, please try again in a few moments');
     }
+    if (error.response?.status === 401 || error.response?.status === 403 || /status code (401|403)/.test(error.message)) {
+      throw new Error('LLM provider authentication failed. Check the API keys in your .env file.');
+    }
+    if (error.response?.status === 402 || /status code 402/.test(error.message)) {
+      throw new Error('LLM provider quota or billing limit reached. Check the configured API account.');
+    }
     throw error;
   }
 }
@@ -187,6 +193,14 @@ function stripCodeFence(text) {
   const raw = String(text || '').trim();
   const fenced = raw.match(/^```[\w-]*\s*\n?([\s\S]*?)\n?```\s*$/);
   return fenced ? fenced[1].trim() : raw;
+}
+
+function sanitizeMermaidCode(code) {
+  return String(code || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/-->\s*\|\s*([^|\n]+?)\s*\|\s*>\s*/g, (_match, label) => `-->|${label.trim()}| `)
+    .replace(/--\s*([^>\n]+?)\s*-->\s*>\s*/g, (_match, label) => `-- ${label.trim()} --> `)
+    .replace(/-->\s*>\s*/g, '--> ');
 }
 
 function parseManifest(rawText) {
@@ -1810,11 +1824,7 @@ app.post('/api/design/diagram', async (req, res) => {
       throw new Error('LLM did not return valid Mermaid code');
     }
 
-    // Normalize whitespace: replace non-breaking spaces with normal spaces
-    mermaidCode = mermaidCode.replace(/\u00a0/g, ' ');
-
-    // Fix common LLM hallucination: -->|Label| > Node
-    mermaidCode = mermaidCode.replace(/-->\|([^|]+)\|\s*>/g, '-->|$1| ');
+    mermaidCode = sanitizeMermaidCode(mermaidCode);
 
     // ── Normalize graph edges (expand & separators) ──────────────────
     const normalizeGraphEdges = (code) => {
@@ -1882,6 +1892,7 @@ app.post('/api/design/diagram', async (req, res) => {
         (_m, a, label, b) => `${a} -->|${label.trim()}| ${b}`
       );
       mermaidCode = normalizeGraphEdges(mermaidCode);
+      mermaidCode = sanitizeMermaidCode(mermaidCode);
     }
 
     // Normalize ER diagrams: SQL types â†’ Mermaid types + uppercase entities
